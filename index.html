@@ -57,35 +57,35 @@ const CONFIG = {
   startSpeed: 150,        // world scroll speed at score 0 (px/s)
   maxSpeed: 220,          // speed never goes above this
   speedPerPoint: 2,       // extra speed for each point scored
-  startGap: 195,          // vertical opening between peaks at score 0
-  minGap: 145,            // the opening never gets smaller than this
-  gapPerPoint: 1.5,       // opening shrinks by this much per point
-  columnSpacing: 250,     // horizontal distance between column pairs
+  startGap: 720 * 0.25,   // opening between stumps at score 0: 25% of the playfield height
+  minGap: 150,            // the opening never gets smaller than this
+  gapPerPoint: 1,         // opening shrinks by this much per point
+  // Centre-to-centre distance between stump pairs, picked at random for
+  // each pair from this range: 34%–49% of the playfield width.
+  spacingMin: 480 * 0.34,
+  spacingMax: 480 * 0.49,
   gapEdgeMargin: 70,      // min distance from an opening to ceiling/ground
-  maxGapShift: 230,       // max change in opening height between neighbours
+  // How far the opening may move between neighbouring pairs depends on
+  // the time Clutch has to get there: these are safe climb / drop rates.
+  climbRate: 180,         // px/s Clutch can comfortably rise by tapping
+  dropRate: 260,          // px/s Clutch can comfortably fall
 
   // --- Feel ---
   restartDelay: 0.6,      // seconds before the game-over screen accepts input
   volume: 0.6,            // master sound volume (0..1)
 
-  // How fast each background layer moves relative to the ground (0..1).
-  parallax: {
-    clouds: 0.12,
-    farRidge: 0.2,
-    midRidge: 0.35,
-    nearRidge: 0.55,
-    ground: 1,
-  },
+  // --- Scrolling ---
+  campusScrollRatio: 0.3, // campus moves at 30% of the obstacle speed (ground moves at 100%)
 
   // Obstacle look
-  columnWidth: 78,
-  pixelSize: 3,           // size of one art pixel for the peaks and scenery (logical px)
+  columnWidth: 480 * 0.08, // stump trunk width: 8% of the playfield width
+  pixelSize: 3,           // size of one art pixel in the ground strip (logical px)
 
   // Player look
   playerRadius: 18,
 };
 
-/* Colour palette for Clutch and the UI. Scenery and peak colours for the
+/* Colour palette for Clutch and the UI. Background and ground colours for the
    day and night themes live in THEMES further down. */
 const PALETTE = {
   // UI accents (Lehigh brown and gold)
@@ -172,45 +172,24 @@ function wrap(v, m) {
 }
 
 /* =====================================================================
-   Themes — day (light) and night (dark). All scenery colours live here.
+   Themes — day (light) and night (dark).
+   Day shows the autumn campus, night the winter-night campus. The ground
+   strip is pixel art in each theme's colours.
    ===================================================================== */
 const THEMES = {
   light: {
-    page: '#9fd3f5',                       // page colour around the game
-    sky: ['#4a94dc', '#5aa4e6', '#6db4ee', '#84c4f4', '#9dd3f8', '#b9e2fb'], // top → horizon
-    sun: '#ffe066', sunCore: '#fff6c2', sunRim: '#f5b82e',
-    cloud: '#ffffff', cloudShade: '#d6eaf8', cloudOutline: '#8db6dc', cloudAlpha: 1,
-    far: '#8fb7d6', farTop: '#a9cbe4', farSnow: '#eef6fc',
-    mid: '#76b884', midTop: '#93cf9c', midOutline: '#4f8f5e',
-    near: '#4f9a5a', nearTop: '#6cb86a', nearOutline: '#2c5e36',
-    tree: '#2f7a3e', treeDark: '#1f5a2c',
+    campus: 'backgrounds/campus-autumn.jpg',
+    sky: '#8bbcfa',                        // matches the image's sky; also the page colour
     grass: '#5cb84a', grassLight: '#8fd46a', grassDark: '#3a8a34',
     dirt: '#9a6a44', dirtLight: '#b8875a', dirtDark: '#6e4a2e',
     stone: '#c9b597', stoneDark: '#8f7c64',
-    peak: {
-      rock: '#9a6f56', rockLight: '#c49a76', rockShade: '#6e4c3c', rockDeep: '#4e3529',
-      rockCrack: '#3b2820', snow: '#f7f9fc', snowShade: '#c3cfe2',
-      pine: '#4f9a5a', pineDark: '#2c5e36', peakOutline: '#2a1610',
-    },
   },
   dark: {
-    page: '#05071a',
-    sky: ['#04061a', '#070b23', '#0b112d', '#101838', '#152044', '#1b2952'],
-    moon: '#eef0dc', moonShade: '#c6c8b0', moonCrater: '#aeb098', moonGlow: '#22305e',
-    star: '#fff8e0',
-    cloud: '#3d4a78', cloudShade: '#2d3862', cloudOutline: '#1a2142', cloudAlpha: 0.9,
-    far: '#18224a', farTop: '#212d5a', farSnow: '#55628e',
-    mid: '#173a36', midTop: '#1f4a40', midOutline: '#0c2420',
-    near: '#1d4a2c', nearTop: '#285e38', nearOutline: '#0b2414',
-    tree: '#163e22', treeDark: '#0c2816',
+    campus: 'backgrounds/campus-winter-night.jpg',
+    sky: '#0c1c53',
     grass: '#2f6e34', grassLight: '#46904a', grassDark: '#1c4a20',
     dirt: '#4a3222', dirtLight: '#5e412c', dirtDark: '#2e1e13',
     stone: '#6e6252', stoneDark: '#463c30',
-    peak: {
-      rock: '#6a5048', rockLight: '#86685a', rockShade: '#4a3632', rockDeep: '#352628',
-      rockCrack: '#241a1a', snow: '#c8d2ea', snowShade: '#8e9cc0',
-      pine: '#2f6a40', pineDark: '#1a3e26', peakOutline: '#140c0a',
-    },
   },
 };
 
@@ -226,8 +205,8 @@ let themeName = (() => {
 const theme = () => THEMES[themeName];
 
 function applyPageColour() {
-  document.documentElement.style.background = theme().page;
-  document.body.style.background = theme().page;
+  document.documentElement.style.background = theme().sky;
+  document.body.style.background = theme().sky;
 }
 
 function toggleTheme() {
@@ -238,18 +217,53 @@ function toggleTheme() {
 applyPageColour();
 
 /* =====================================================================
-   Pixel-art scenery. Every layer is painted once per theme at "art
-   resolution" (1 art pixel = CONFIG.pixelSize logical px) onto a small
-   offscreen canvas, then drawn scaled up without smoothing — the same
-   chunky look as Clutch and the peaks.
+   Campus background. The picture is scaled so its bottom edge sits on
+   the ground line, then looped as  picture | mirrored picture | ...  so
+   the edges always meet seamlessly. It scrolls at
+   CONFIG.campusScrollRatio × the obstacle speed (see update()).
+   ===================================================================== */
+const CAMPUS = {
+  light: loadImage(THEMES.light.campus),
+  dark: loadImage(THEMES.dark.campus),
+};
+
+// Width of one copy of the picture on screen, and of one full loop.
+function campusWidth(img) {
+  return (img.naturalWidth * GROUND_Y) / img.naturalHeight;
+}
+function campusLoopWidth() {
+  const img = CAMPUS[themeName];
+  return imageReady(img) ? campusWidth(img) * 2 : 0;
+}
+
+function drawBackground(c, campusScroll) {
+  const img = CAMPUS[themeName];
+  c.fillStyle = theme().sky;
+  c.fillRect(0, 0, W, GROUND_Y);
+  if (!imageReady(img)) return;
+  const w = campusWidth(img);
+  const loop = w * 2;
+  for (let x = -wrap(campusScroll, loop); x < W; x += loop) {
+    c.drawImage(img, x, 0, w, GROUND_Y);
+    // Mirrored copy: its left edge is the picture's right edge, and so on.
+    c.save();
+    c.translate(x + loop, 0);
+    c.scale(-1, 1);
+    c.drawImage(img, 0, 0, w, GROUND_Y);
+    c.restore();
+  }
+}
+
+/* =====================================================================
+   Ground strip — pixel-art grass and dirt, painted once per theme at
+   "art resolution" (1 art pixel = CONFIG.pixelSize logical px) and drawn
+   scaled up without smoothing, matching Clutch's pixel style.
    ===================================================================== */
 const PX = CONFIG.pixelSize;
 const ART_W = W / PX;                         // 160 art px across the screen
-const SKY_ROWS = GROUND_Y / PX;               // 208 rows of sky down to the ground
 const GROUND_ROWS = CONFIG.groundHeight / PX; // 32 rows of grass and dirt
 const BLADE_ROWS = 3;                         // grass blades poke above the ground line
-const SCENERY_TILE = 960;                     // hills repeat every 960 logical px
-const TILE_ART = SCENERY_TILE / PX;
+const GROUND_TILE = 32;                       // art px; the pattern repeats this often
 
 // Small canvas plus a one-pixel "plot" helper.
 function pixelCanvas(w, h) {
@@ -261,180 +275,6 @@ function pixelCanvas(w, h) {
   return { cv, g, plot };
 }
 
-// Sky: flat colour bands with a dithered seam between each, plus the sun
-// (day) or the moon with a soft dithered glow (night).
-function buildSky(T, night) {
-  const { cv, g, plot } = pixelCanvas(ART_W, SKY_ROWS);
-  const bands = T.sky.length;
-  const bandH = Math.ceil(SKY_ROWS / bands);
-  for (let y = 0; y < SKY_ROWS; y++) {
-    const i = Math.min(bands - 1, Math.floor(y / bandH));
-    g.fillStyle = T.sky[i];
-    g.fillRect(0, y, ART_W, 1);
-    if (i < bands - 1 && y % bandH >= bandH - 3) {
-      // Checkerboard of the next band's colour, denser toward it.
-      const step = y % bandH === bandH - 1 ? 1 : 2;
-      for (let x = (y % 2); x < ART_W; x += step * 2) plot(x, y, T.sky[i + 1]);
-    }
-  }
-
-  const cx = 112, cy = 40;
-  if (!night) {
-    const r = 11;
-    // Eight short rays.
-    for (let k = 0; k < 8; k++) {
-      const a = (k * Math.PI) / 4;
-      for (let d = r + 3; d <= r + 5; d++) {
-        plot(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d), T.sun);
-      }
-    }
-    for (let y = -r; y <= r; y++) {
-      for (let x = -r; x <= r; x++) {
-        const d = Math.hypot(x, y);
-        if (d > r + 0.3) continue;
-        plot(cx + x, cy + y, d > r - 1.2 ? T.sunRim : d < r * 0.55 ? T.sunCore : T.sun);
-      }
-    }
-  } else {
-    const r = 10;
-    for (let y = -r - 5; y <= r + 5; y++) {
-      for (let x = -r - 5; x <= r + 5; x++) {
-        const d = Math.hypot(x, y);
-        if (d > r + 0.3 && d < r + 5 && (x + y) % 2 === 0) plot(cx + x, cy + y, T.moonGlow);
-      }
-    }
-    const craters = [[-3, 3, 2.2], [3, -4, 1.6], [4, 4, 1.1], [-5, -3, 1]];
-    for (let y = -r; y <= r; y++) {
-      for (let x = -r; x <= r; x++) {
-        if (Math.hypot(x, y) > r + 0.3) continue;
-        let col = T.moon;
-        if (Math.hypot(x + 3, y + 2) > r) col = T.moonShade;       // shaded lower-right rim
-        for (const [kx, ky, kr] of craters) if (Math.hypot(x - kx, y - ky) <= kr) col = T.moonCrater;
-        plot(cx + x, cy + y, col);
-      }
-    }
-  }
-  return cv;
-}
-
-// Twinkling night stars, on the pixel grid (drawn live, not pre-rendered).
-const starRand = mulberry32(4242);
-const STARS = Array.from({ length: 55 }, () => ({
-  x: Math.floor(starRand() * ART_W),
-  y: Math.floor(starRand() * 120),
-  big: starRand() < 0.18,
-  phase: starRand() * Math.PI * 2,
-  speed: 1 + starRand() * 2.5,
-}));
-
-function drawStars(c, time) {
-  c.fillStyle = theme().star;
-  for (const s of STARS) {
-    if (Math.hypot(s.x - 112, s.y - 40) < 17) continue; // keep clear of the moon
-    c.globalAlpha = (0.45 + 0.55 * Math.sin(time * s.speed + s.phase)) * (1 - s.y / 150);
-    c.fillRect(s.x * PX, s.y * PX, PX, PX);
-    if (s.big) {
-      c.globalAlpha *= 0.6;
-      c.fillRect((s.x - 1) * PX, s.y * PX, PX, PX);
-      c.fillRect((s.x + 1) * PX, s.y * PX, PX, PX);
-      c.fillRect(s.x * PX, (s.y - 1) * PX, PX, PX);
-      c.fillRect(s.x * PX, (s.y + 1) * PX, PX, PX);
-    }
-  }
-  c.globalAlpha = 1;
-}
-
-// Puffy pixel cloud with a flat base, shaded underside and outline.
-function buildCloud(T, s) {
-  const puffs = [[0, 0, 7], [8, -3, 9], [17, -1, 7], [24, 2, 5], [-7, 2, 5]]
-    .map(([x, y, r]) => [x * s, y * s, r * s]);
-  const minX = Math.floor(-12 * s) - 1, maxX = Math.ceil(30 * s) + 1;
-  const minY = Math.floor(-12 * s) - 1, base = Math.round(5 * s);
-  const w = maxX - minX + 1, h = base - minY + 1;
-  const inside = (x, y) => y <= base && puffs.some(([px, py, r]) => Math.hypot(x - px, y - py) <= r);
-  const { cv, plot } = pixelCanvas(w, h);
-  for (let y = minY; y <= base; y++) {
-    for (let x = minX; x <= maxX; x++) {
-      if (!inside(x, y)) continue;
-      const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
-      plot(x - minX, y - minY, edge ? T.cloudOutline : y >= base - 2 ? T.cloudShade : T.cloud);
-    }
-  }
-  return cv;
-}
-
-const cloudRand = mulberry32(777);
-const CLOUDS = Array.from({ length: 6 }, (_, i) => ({
-  x: (i / 6) * SCENERY_TILE + cloudRand() * 80,
-  y: 70 + cloudRand() * 230,
-  v: i % 3, // which cloud shape (size) to use
-}));
-
-// Height (logical y) of a ridge at logical x, from its sampled points.
-const RIDGE_STEP = 8;
-function makeRidge(baseY, waves, peaky) {
-  const pts = [];
-  for (let x = 0; x <= SCENERY_TILE; x += RIDGE_STEP) {
-    let h = 0;
-    for (const [freq, amp, phase] of waves) {
-      const a = (Math.PI * freq * x) / SCENERY_TILE + phase;
-      // "peaky" gives sharp mountain tops, otherwise rolling hills.
-      h += peaky ? amp * (1 - Math.abs(Math.sin(a))) : amp * Math.sin(a * 2);
-    }
-    pts.push(baseY - h);
-  }
-  return pts;
-}
-function ridgeAt(pts, x) {
-  const tx = wrap(x, SCENERY_TILE);
-  const i = Math.floor(tx / RIDGE_STEP);
-  const t = (tx - i * RIDGE_STEP) / RIDGE_STEP;
-  return pts[i] + (pts[i + 1] - pts[i]) * t;
-}
-const FAR_RIDGE = makeRidge(520, [[3, 70, 0.4], [7, 30, 1.1], [17, 10, 0.2]], true);
-const MID_RIDGE = makeRidge(575, [[2, 26, 0.9], [5, 14, 2.0], [11, 5, 0.5]], false);
-const NEAR_RIDGE = makeRidge(612, [[3, 18, 2.4], [7, 8, 0.3]], false);
-
-// One ridge layer as a strip wide enough to scroll seamlessly (one tile
-// plus a screen). opts: fill / top / outline colours, snowy peaks, trees.
-function buildRidge(pts, opts) {
-  const width = TILE_ART + ART_W;
-  const { cv, g, plot } = pixelCanvas(width, SKY_ROWS);
-  const tops = [];
-  for (let ax = 0; ax < width; ax++) tops.push(Math.round(ridgeAt(pts, ax * PX + PX / 2) / PX));
-  const highest = Math.min(...tops);
-  const rnd = mulberry32(opts.seed);
-  for (let ax = 0; ax < width; ax++) {
-    const ty = tops[ax];
-    g.fillStyle = opts.fill;
-    g.fillRect(ax, ty, 1, SKY_ROWS - ty);
-    plot(ax, ty + 1, opts.top);
-    if (opts.snow && ty < highest + 9) {
-      for (let k = 0; k < 3; k++) plot(ax, ty + k, opts.snow);
-    }
-    plot(ax, ty, opts.outline || opts.top);
-  }
-  // Round pixel trees along the ridge line (kept off the strip ends so
-  // the pattern repeats cleanly).
-  if (opts.trees) {
-    for (let ax = 4; ax < TILE_ART - 4; ax += 5 + Math.floor(rnd() * 9)) {
-      const ty = Math.max(tops[ax - 1], tops[ax], tops[ax + 1]);
-      for (const copy of [0, TILE_ART]) {
-        if (ax + copy + 1 >= width) continue;
-        const x = ax + copy;
-        plot(x, ty - 3, opts.outline);
-        plot(x - 1, ty - 2, opts.outline); plot(x, ty - 2, opts.trees[0]); plot(x + 1, ty - 2, opts.outline);
-        plot(x - 1, ty - 1, opts.outline); plot(x, ty - 1, opts.trees[1]); plot(x + 1, ty - 1, opts.outline);
-        plot(x, ty, opts.outline);
-      }
-    }
-  }
-  return cv;
-}
-
-// Ground strip: grass blades and turf on top, layered dirt with pebbles
-// below. Painted as one repeating tile, then copied across a strip.
-const GROUND_TILE = 32; // art px
 function buildGround(T) {
   const rnd = mulberry32(99);
   const rows = GROUND_ROWS + BLADE_ROWS;
@@ -475,220 +315,74 @@ function buildGround(T) {
   for (let x = 0; x < width; x += GROUND_TILE) strip.g.drawImage(tile.cv, x, 0);
   return strip.cv;
 }
-
-// Pre-render every layer for both themes.
-function buildScenery(T, night) {
-  return {
-    sky: buildSky(T, night),
-    clouds: [0.8, 1, 1.25].map((s) => buildCloud(T, s)),
-    far: buildRidge(FAR_RIDGE, { fill: T.far, top: T.farTop, snow: T.farSnow, seed: 1 }),
-    mid: buildRidge(MID_RIDGE, { fill: T.mid, top: T.midTop, outline: T.midOutline, seed: 2 }),
-    near: buildRidge(NEAR_RIDGE, {
-      fill: T.near, top: T.nearTop, outline: T.nearOutline, trees: [T.tree, T.treeDark], seed: 3,
-    }),
-    ground: buildGround(T),
-  };
-}
-const SCENERY = { light: buildScenery(THEMES.light, false), dark: buildScenery(THEMES.dark, true) };
-
-/* =====================================================================
-   Draw functions — background layers and ground
-   ===================================================================== */
-
-// Draws a pre-rendered pixel canvas at logical position, scaled by PX.
-function blit(c, img, x, y) {
-  c.drawImage(img, x, y, img.width * PX, img.height * PX);
-}
-
-function drawRidgeLayer(c, img, scroll, factor) {
-  blit(c, img, -wrap(scroll * factor, SCENERY_TILE), 0);
-}
-
-function drawBackground(c, time, scroll) {
-  const S = SCENERY[themeName];
-  c.save();
-  c.imageSmoothingEnabled = false;
-  blit(c, S.sky, 0, 0);
-  if (themeName === 'dark') drawStars(c, time);
-
-  const cloudOff = wrap(scroll * CONFIG.parallax.clouds, SCENERY_TILE);
-  c.globalAlpha = theme().cloudAlpha;
-  for (const cl of CLOUDS) {
-    const img = S.clouds[cl.v];
-    const x = wrap(cl.x - cloudOff, SCENERY_TILE) - 100;
-    blit(c, img, x, cl.y);
-    if (x + img.width * PX > SCENERY_TILE - 100) blit(c, img, x - SCENERY_TILE, cl.y);
-  }
-  c.globalAlpha = 1;
-
-  drawRidgeLayer(c, S.far, scroll, CONFIG.parallax.farRidge);
-  drawRidgeLayer(c, S.mid, scroll, CONFIG.parallax.midRidge);
-  drawRidgeLayer(c, S.near, scroll, CONFIG.parallax.nearRidge);
-  c.restore();
-}
+const GROUND = { light: buildGround(THEMES.light), dark: buildGround(THEMES.dark) };
 
 function drawGround(c, scroll) {
+  const img = GROUND[themeName];
   c.save();
   c.imageSmoothingEnabled = false;
-  blit(c, SCENERY[themeName].ground, -wrap(scroll, GROUND_TILE * PX), GROUND_Y - BLADE_ROWS * PX);
+  c.drawImage(img, -wrap(scroll, GROUND_TILE * PX), GROUND_Y - BLADE_ROWS * PX, img.width * PX, img.height * PX);
   c.restore();
 }
 
 /* =====================================================================
-   Draw functions — mountain peak obstacles (pixel art)
-   Each peak is painted once, pixel by pixel, onto a tiny offscreen canvas
-   when its column spawns, then scaled up without smoothing so it keeps
-   the same chunky pixel look as Clutch's sprite.
+   Tree-stump obstacles. Each stump is two images: the cut end ("cap"),
+   always drawn at its original proportions, and a bark section that is
+   repeated as many times as needed to reach the ceiling or the ground.
    ===================================================================== */
+const STUMP = {
+  bottomCap: loadImage('sprites/stump-bottom-cap.png'),   // cut end on top
+  bottomBark: loadImage('sprites/stump-bottom-bark.png'),
+  topCap: loadImage('sprites/stump-top-cap.png'),         // cut end underneath
+  topBark: loadImage('sprites/stump-top-bark.png'),
+  // The trunk itself is this fraction of the image width; the rest is the
+  // knobbly bark edge. CONFIG.columnWidth is the trunk (and hitbox) width.
+  bodyFraction: 205 / 222,
+};
 
-// Pine tree stamp: G = pine, D = dark pine, T = trunk, . = empty.
-const PINE = ['..G..', '.GGD.', 'GGGDD', '.GGD.', 'GGGDD', '..T..'];
-
-/**
- * Builds one mountain peak. Row 0 is the summit; rows grow toward the
- * root (the ground for bottom peaks, the ceiling for top peaks).
- * Returns the canvas plus the shape numbers the hitbox needs.
- */
-function makePeak(seed, rows) {
-  const rnd = mulberry32(seed);
-  const WP = Math.round(CONFIG.columnWidth / CONFIG.pixelSize); // width in art pixels
-  const apex = Math.round(WP / 2 + (rnd() * 2 - 1) * 3);  // summit column, a bit off-centre
-  const tpl = 22 + Math.floor(rnd() * 10);  // rows until the left slope reaches full width
-  const tpr = 22 + Math.floor(rnd() * 10);  // same for the right slope
-
-  // Silhouette edges for each row (right edge is exclusive).
-  const left = (y) => (y >= tpl ? 0 : Math.round((apex - 1) * (1 - y / tpl)));
-  const right = (y) => (y >= tpr ? WP : Math.round(apex + 1 + (WP - apex - 1) * (y / tpr)));
-  // Occasional rocky ledges: short runs where the edge steps inward by one
-  // pixel (never outward, so the hitbox is never bigger than the art).
-  const ledges = (arr) => {
-    for (let y = 0; y < rows; y++) arr.push(0);
-    for (let y = 4; y < rows; y++) {
-      if (rnd() < 0.06) {
-        const len = 3 + Math.floor(rnd() * 4);
-        for (let k = y; k < Math.min(rows, y + len); k++) arr[k] = 1;
-        y += len + 2;
-      }
-    }
-    return arr;
-  };
-  const notchL = ledges([]), notchR = ledges([]);
-  const inside = (x, y) =>
-    y >= 0 && y < rows && x >= left(y) + notchL[y] && x < right(y) - notchR[y];
-
-  // Jagged snow cap, deeper near the summit, with a few drips.
-  const snowLine = [];
-  for (let x = 0; x < WP; x++) {
-    const nearApex = Math.abs(x - apex) < 5 ? 3 : 0;
-    snowLine.push(11 + Math.floor(rnd() * 3) + nearApex + (rnd() < 0.18 ? 3 : 0));
-  }
-  // Light comes from the upper left: the shade boundary is a ridge that
-  // runs from the summit down and to the right.
-  const ridge = (y) => apex + Math.floor(y * 0.25);
-
-  // Rock strata: short dark cracks at irregular intervals.
-  const cracks = new Set();
-  for (let y = 12 + Math.floor(rnd() * 4); y < rows; y += 8 + Math.floor(rnd() * 6)) {
-    const len = 3 + Math.floor(rnd() * 6);
-    const start = Math.floor(rnd() * (WP - len));
-    for (let x = start; x < start + len; x++) cracks.add(y * WP + x);
-  }
-
-  // 1) Base colours: lit left face, shaded right face, snow cap.
-  const grid = [];
-  for (let y = 0; y < rows; y++) {
-    const row = [];
-    for (let x = 0; x < WP; x++) {
-      if (!inside(x, y)) { row.push(null); continue; }
-      const r = ridge(y);
-      const shaded = x > r || (x === r && (x + y) % 2 === 0); // dithered ridge line
-      if (y < snowLine[x]) {
-        row.push(shaded ? 'snowShade' : 'snow');
-      } else if (cracks.has(y * WP + x)) {
-        row.push('rockCrack');
-      } else if (x <= left(y) + notchL[y] + 1) {
-        row.push('rockLight');
-      } else if (x >= right(y) - notchR[y] - 2) {
-        row.push('rockDeep');
-      } else {
-        row.push(shaded ? 'rockShade' : 'rock');
-      }
-    }
-    grid.push(row);
-  }
-
-  // 2) A few pine trees on the slopes below the snow.
-  const snowMax = Math.max(...snowLine);
-  const treeTop = snowMax + 3;
-  const treeBottom = Math.min(rows - 8, Math.max(tpl, tpr) + 18);
-  const fits = (px, py) => {
-    for (let dy = -1; dy <= PINE.length; dy++) {
-      for (let dx = -1; dx <= 5; dx++) if (!inside(px + dx, py + dy)) return false;
-    }
-    return true;
-  };
-  const pines = 3 + Math.floor(rnd() * 3);
-  for (let i = 0; i < pines && treeBottom > treeTop; i++) {
-    const py = treeTop + Math.floor(rnd() * (treeBottom - treeTop));
-    const px = Math.floor(rnd() * (WP - 5));
-    if (!fits(px, py)) continue; // only whole trees, clear of the outline
-    for (let dy = 0; dy < PINE.length; dy++) {
-      for (let dx = 0; dx < 5; dx++) {
-        const ch = PINE[dy][dx];
-        if (ch === '.') continue;
-        grid[py + dy][px + dx] = ch === 'G' ? 'pine' : ch === 'D' ? 'pineDark' : 'rockCrack';
-      }
-    }
-  }
-
-  // 3) Dark outline wherever a pixel borders empty space (except the root).
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < WP; x++) {
-      if (!grid[y][x]) continue;
-      if (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1)) grid[y][x] = 'peakOutline';
-    }
-  }
-
-  // Paint the grid (which holds colour names) once per theme onto tiny
-  // canvases, merging horizontal runs of the same colour.
-  const paint = (colours) => {
-    const cv = document.createElement('canvas');
-    cv.width = WP;
-    cv.height = rows;
-    const g = cv.getContext('2d');
-    for (let y = 0; y < rows; y++) {
-      let x = 0;
-      while (x < WP) {
-        const key = grid[y][x];
-        let end = x + 1;
-        while (end < WP && grid[y][end] === key) end++;
-        if (key) { g.fillStyle = colours[key]; g.fillRect(x, y, end - x, 1); }
-        x = end;
-      }
-    }
-    return cv;
-  };
-  const canvases = { light: paint(THEMES.light.peak), dark: paint(THEMES.dark.peak) };
-  return { canvases, apex, tpl, tpr, rows, WP };
+function stumpImagesReady() {
+  return [STUMP.bottomCap, STUMP.bottomBark, STUMP.topCap, STUMP.topBark].every(imageReady);
 }
 
-// Draws one peak with its summit at tipY. dir = 1 grows downward (bottom
-// peak, summit on top); dir = -1 grows upward (top peak, hanging summit).
-function drawPeak(c, x, tipY, peak, dir) {
-  const P = CONFIG.pixelSize;
-  c.save();
-  c.imageSmoothingEnabled = false;
-  c.translate(x, tipY);
-  c.scale(1, dir);
-  c.drawImage(peak.canvases[themeName], 0, 0, peak.WP * P, peak.rows * P);
-  c.restore();
+// Drawn width of a stump image and the height an image gets at that width.
+function stumpDrawWidth() {
+  return CONFIG.columnWidth / STUMP.bodyFraction;
+}
+function scaledHeight(img, w) {
+  return (w * img.naturalHeight) / img.naturalWidth;
 }
 
-// A full obstacle: one peak hanging from the top, one rising from the
-// ground. gapTop/gapBottom are the summit positions.
-function drawColumnPair(c, col) {
-  drawPeak(c, col.x, col.gapTop, col.top, -1);
-  drawPeak(c, col.x, col.gapBottom, col.bottom, 1);
+// A pair of stumps sharing one centre line: one hanging from the top with
+// its cut end at gapTop, one standing on the ground with its cut end at
+// gapBottom.
+function drawStumpPair(c, col) {
+  const tw = CONFIG.columnWidth;
+  if (!stumpImagesReady()) {
+    // Plain fallback while the images load.
+    c.fillStyle = '#7a4a2a';
+    c.fillRect(col.x, 0, tw, col.gapTop);
+    c.fillRect(col.x, col.gapBottom, tw, GROUND_Y - col.gapBottom);
+    return;
+  }
+  const dw = stumpDrawWidth();
+  const dx = col.x + tw / 2 - dw / 2; // centre the image on the trunk
+
+  // Bottom stump: bark tiles from under the cap down past the ground line
+  // (the ground strip covers the rest), then the cap on top.
+  const bCapH = scaledHeight(STUMP.bottomCap, dw);
+  const bBarkH = scaledHeight(STUMP.bottomBark, dw);
+  for (let y = col.gapBottom + bCapH - 1; y < GROUND_Y + BLADE_ROWS * PX; y += bBarkH - 1) {
+    c.drawImage(STUMP.bottomBark, dx, y, dw, bBarkH);
+  }
+  c.drawImage(STUMP.bottomCap, dx, col.gapBottom, dw, bCapH);
+
+  // Top stump: bark tiles upward from above the cap until off-screen.
+  const tCapH = scaledHeight(STUMP.topCap, dw);
+  const tBarkH = scaledHeight(STUMP.topBark, dw);
+  for (let y = col.gapTop - tCapH + 1 - tBarkH; y + tBarkH > 0; y -= tBarkH - 1) {
+    c.drawImage(STUMP.topBark, dx, y, dw, tBarkH);
+  }
+  c.drawImage(STUMP.topCap, dx, col.gapTop - tCapH, dw, tCapH);
 }
 
 /* =====================================================================
@@ -1192,7 +886,8 @@ const sound = {
 const game = {
   state: 'ready',
   time: 0,
-  scroll: 0,          // total distance scrolled, drives every layer
+  scroll: 0,          // distance the ground and stumps have scrolled
+  campusScroll: 0,    // distance the campus background has scrolled (slower)
   speed: CONFIG.startSpeed,
   score: 0,
   best: loadNumber(STORAGE.best),
@@ -1225,7 +920,7 @@ function resetGame() {
 
 function startGame() {
   game.state = 'playing';
-  spawnColumn(W + 120);
+  spawnColumn(W + 120, 0);
   flap();
 }
 
@@ -1245,41 +940,49 @@ function currentGap() {
   return Math.max(CONFIG.minGap, CONFIG.startGap - game.score * CONFIG.gapPerPoint);
 }
 
-function spawnColumn(x) {
+function randomSpacing() {
+  return CONFIG.spacingMin + Math.random() * (CONFIG.spacingMax - CONFIG.spacingMin);
+}
+
+// Adds a stump pair at x. `spacing` is the centre-to-centre distance from
+// the previous pair (0 for the first pair, which has plenty of lead-in).
+function spawnColumn(x, spacing) {
   const gap = currentGap();
-  // Keep the opening away from the ceiling/ground and not too far from
-  // the previous one, so every layout is reachable.
+  // Keep the opening away from the ceiling and ground...
   const minC = CONFIG.gapEdgeMargin + gap / 2;
   const maxC = GROUND_Y - CONFIG.gapEdgeMargin - gap / 2;
-  const lo = Math.max(minC, game.lastGapCenter - CONFIG.maxGapShift);
-  const hi = Math.min(maxC, game.lastGapCenter + CONFIG.maxGapShift);
+  let lo = minC, hi = maxC;
+  if (spacing > 0) {
+    // ...and within reach of the previous opening. The time Clutch has is
+    // the clear distance between the two trunks (minus Clutch's size) at
+    // the speed the game will be going by then.
+    const speed = Math.min(CONFIG.maxSpeed, game.speed + 2 * CONFIG.speedPerPoint);
+    const clear = spacing - CONFIG.columnWidth - CONFIG.playerRadius * 2;
+    const t = Math.max(0.2, clear / speed);
+    lo = Math.max(minC, game.lastGapCenter - CONFIG.climbRate * t);
+    hi = Math.min(maxC, game.lastGapCenter + CONFIG.dropRate * t);
+  }
   const center = lo + Math.random() * (hi - lo);
   game.lastGapCenter = center;
-  const gapTop = center - gap / 2;
-  const gapBottom = center + gap / 2;
-  const P = CONFIG.pixelSize;
-  const seed = () => Math.floor(Math.random() * 1e9);
   game.columns.push({
     x,
-    gapTop,
-    gapBottom,
+    gapTop: center - gap / 2,
+    gapBottom: center + gap / 2,
     passed: false,
-    // Each peak is unique; rows reach past the ceiling / under the ground.
-    top: makePeak(seed(), Math.ceil(gapTop / P) + 2),
-    bottom: makePeak(seed(), Math.ceil((GROUND_Y - gapBottom) / P) + 2),
+    next: randomSpacing(), // distance to the pair that will follow this one
   });
 }
 
-// Hitbox outline of one peak, matching the slopes in makePeak().
-// dir = 1 for the bottom peak (grows down from tipY), -1 for the top one.
-function peakPolygon(x, tipY, peak, dir) {
-  const P = CONFIG.pixelSize;
-  const far = (peak.rows + 20) * P;
-  const pt = (ax, ay) => [x + ax * P, tipY + dir * ay * P];
+// Hitbox of one stump: the trunk rectangle with the corners at the cut
+// end trimmed, since the round cut face doesn't fill them.
+// dir = 1 for the bottom stump (grows down from tipY), -1 for the top one.
+function stumpPolygon(x, tipY, dir) {
+  const w = CONFIG.columnWidth;
+  const cw = w * 0.15, ch = 5;                 // trimmed corner size
+  const far = tipY + dir * (GROUND_Y + 100);   // well past the screen edge
   return [
-    pt(peak.apex - 1, 0), pt(peak.apex + 1, 0),
-    pt(peak.WP, peak.tpr), [x + peak.WP * P, tipY + dir * far],
-    [x, tipY + dir * far], pt(0, peak.tpl),
+    [x, far], [x, tipY + dir * ch], [x + cw, tipY],
+    [x + w - cw, tipY], [x + w, tipY + dir * ch], [x + w, far],
   ];
 }
 
@@ -1310,8 +1013,8 @@ function hitsColumn(col, cx, cy, r) {
   const w = CONFIG.columnWidth;
   if (cx + r < col.x || cx - r > col.x + w) return false; // quick reject
   return (
-    circleHitsPolygon(cx, cy, r, peakPolygon(col.x, col.gapTop, col.top, -1)) ||
-    circleHitsPolygon(cx, cy, r, peakPolygon(col.x, col.gapBottom, col.bottom, 1))
+    circleHitsPolygon(cx, cy, r, stumpPolygon(col.x, col.gapTop, -1)) ||
+    circleHitsPolygon(cx, cy, r, stumpPolygon(col.x, col.gapBottom, 1))
   );
 }
 
@@ -1361,6 +1064,7 @@ function update(dt) {
     case 'ready': {
       // Hover in place while the world drifts by.
       game.scroll += CONFIG.startSpeed * dt;
+      game.campusScroll += CONFIG.startSpeed * CONFIG.campusScrollRatio * dt;
       p.y = CONFIG.readyY + Math.sin(game.time * 3) * 6;
       p.angle = 0;
       p.wingSpeed += (CONFIG.wingBeatSpeed - p.wingSpeed) * Math.min(1, dt * 3);
@@ -1372,12 +1076,15 @@ function update(dt) {
       game.speed = Math.min(CONFIG.maxSpeed, CONFIG.startSpeed + game.score * CONFIG.speedPerPoint);
       const dx = game.speed * dt;
       game.scroll += dx;
+      // The campus loops on its own, slower; it never affects spawning.
+      game.campusScroll += dx * CONFIG.campusScrollRatio;
 
       for (const col of game.columns) col.x -= dx;
       game.columns = game.columns.filter((col) => col.x > -CONFIG.columnWidth - 10);
       const last = game.columns[game.columns.length - 1];
-      if (!last || last.x < W - CONFIG.columnSpacing) {
-        spawnColumn((last ? last.x : W) + CONFIG.columnSpacing);
+      // Each pair carries its own random distance to the next one.
+      if (!last || last.x + last.next <= W + 10) {
+        spawnColumn(last ? last.x + last.next : W + 10, last ? last.next : 0);
       }
 
       p.wingSpeed += (CONFIG.wingBeatSpeed - p.wingSpeed) * Math.min(1, dt * 3);
@@ -1392,7 +1099,7 @@ function update(dt) {
         }
       }
 
-      // Collisions: ground, ceiling, peaks.
+      // Collisions: ground, ceiling, stumps.
       const hr = R - CONFIG.hitboxForgiveness;
       if (p.y + R >= GROUND_Y) {
         p.y = GROUND_Y - R;
@@ -1432,7 +1139,7 @@ function update(dt) {
    ===================================================================== */
 function drawReadyScreen(c) {
   drawText(c, 'CLUTCH', W / 2, 150, 62);
-  drawText(c, 'Fly the Mountain Hawk between the peaks', W / 2, 202, 18);
+  drawText(c, 'Fly the Mountain Hawk across campus', W / 2, 202, 18);
 
   drawPanel(c, 90, 400, W - 180, 130);
   const pulse = 0.6 + 0.4 * Math.sin(game.time * 4);
@@ -1486,9 +1193,9 @@ function render(c) {
     c.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m);
   }
 
-  drawBackground(c, game.time, game.scroll);
+  drawBackground(c, game.campusScroll);
   for (const col of game.columns) {
-    drawColumnPair(c, col);
+    drawStumpPair(c, col);
   }
   drawGround(c, game.scroll);
 
