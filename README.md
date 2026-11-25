@@ -23,7 +23,7 @@ Gameplay and look are controlled by the `CONFIG` object at the top of the script
 
 ## Clutch's sprite
 
-`sprites/clutch-1.png` is the in-game sprite, a smaller copy of the original drawing in `sprites/source/`. To animate the wings, add more frames (same canvas size, body in the same spot, facing right) and list them in `SPRITE.frames` in `index.html`. `SPRITE.width`, `anchorX` and `anchorY` set the size and where the hitbox sits on the image. If the images fail to load, the game draws a built-in hawk instead.
+`sprites/clutch-1.png` to `clutch-3.png` are the wing-beat frames (up, level, down), smaller copies of the original drawings in `sprites/source/`. They play in the order listed in `SPRITE.frames` in `index.html`, and each flap jumps to the downstroke. New frames should keep the same canvas size, with the body in the same spot, facing right. Wing-beat speed is set by `wingBeatSpeed` and `flapWingSpeed` in `CONFIG`. `SPRITE.width`, `anchorX` and `anchorY` set the size and where the hitbox sits on the image. If the images fail to load, the game draws a built-in hawk instead.
 
 ## Features
 
