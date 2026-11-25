@@ -57,7 +57,7 @@ const CONFIG = {
   startSpeed: 150,        // world scroll speed at score 0 (px/s)
   maxSpeed: 220,          // speed never goes above this
   speedPerPoint: 2,       // extra speed for each point scored
-  startGap: 195,          // vertical opening between crystals at score 0
+  startGap: 195,          // vertical opening between peaks at score 0
   minGap: 145,            // the opening never gets smaller than this
   gapPerPoint: 1.5,       // opening shrinks by this much per point
   columnSpacing: 250,     // horizontal distance between column pairs
@@ -80,13 +80,13 @@ const CONFIG = {
 
   // Obstacle look
   columnWidth: 78,
-  columnTipLength: 26,
+  obstaclePixel: 3,       // size of one art pixel on the mountain peaks (logical px)
 
   // Player look
   playerRadius: 18,
 };
 
-/* Colour palette: dusk sky, teal crystals, brown-and-white hawk. */
+/* Colour palette: dusk sky, pixel-art mountain peaks, brown-and-white hawk. */
 const PALETTE = {
   skyTop: '#1d1540',
   skyMid: '#5b2a6e',
@@ -103,11 +103,21 @@ const PALETTE = {
   midRidge: '#7a3f78',
   nearRidge: '#4a2a5e',
 
-  crystalLight: '#b8fff2',
-  crystalMid: '#46e0c8',
-  crystalDark: '#1b9e9e',
-  crystalCollar: '#14707a',
-  crystalOutline: '#0e3f4f',
+  // Mountain peaks (pixel art, outlined like Clutch's sprite).
+  rock: '#9a6f56',
+  rockLight: '#c49a76',
+  rockShade: '#6e4c3c',
+  rockDeep: '#4e3529',
+  rockCrack: '#3b2820',
+  snow: '#f7f9fc',
+  snowShade: '#c3cfe2',
+  pine: '#4f9a5a',
+  pineDark: '#2c5e36',
+  peakOutline: '#2a1610',
+
+  // UI accents
+  accentLight: '#b8fff2',
+  accentMid: '#46e0c8',
 
   groundDark: '#2e1a3a',
   groundStripe: '#3a2148',
@@ -407,111 +417,155 @@ function drawGround(c, scroll) {
 }
 
 /* =====================================================================
-   Draw functions — crystal column obstacles
+   Draw functions — mountain peak obstacles (pixel art)
+   Each peak is painted once, pixel by pixel, onto a tiny offscreen canvas
+   when its column spawns, then scaled up without smoothing so it keeps
+   the same chunky pixel look as Clutch's sprite.
    ===================================================================== */
 
-// Draws one crystal column in local space: root at y=0, tip pointing
-// toward +y, ending at y=length. Callers flip it for the bottom piece.
-function drawCrystal(c, x, length, time) {
-  const w = CONFIG.columnWidth;
-  const T = CONFIG.columnTipLength;
-  const shaftEnd = length - T;
-  const a = w * 0.28, b = w * 0.7;          // facet split lines
-  const ax = w * 0.42, bx = w * 0.58;       // blunt tip edges
+// Pine tree stamp: G = pine, D = dark pine, T = trunk, . = empty.
+const PINE = ['..G..', '.GGD.', 'GGGDD', '.GGD.', 'GGGDD', '..T..'];
 
-  c.save();
-  c.translate(x, 0);
+/**
+ * Builds one mountain peak. Row 0 is the summit; rows grow toward the
+ * root (the ground for bottom peaks, the ceiling for top peaks).
+ * Returns the canvas plus the shape numbers the hitbox needs.
+ */
+function makePeak(seed, rows) {
+  const rnd = mulberry32(seed);
+  const WP = Math.round(CONFIG.columnWidth / CONFIG.obstaclePixel); // width in art pixels
+  const apex = Math.round(WP / 2 + (rnd() * 2 - 1) * 3);  // summit column, a bit off-centre
+  const tpl = 22 + Math.floor(rnd() * 10);  // rows until the left slope reaches full width
+  const tpr = 22 + Math.floor(rnd() * 10);  // same for the right slope
 
-  // Shaft facets: light / mid / dark bands.
-  c.fillStyle = PALETTE.crystalLight;
-  c.fillRect(0, -2, a, shaftEnd + 2);
-  c.fillStyle = PALETTE.crystalMid;
-  c.fillRect(a, -2, b - a, shaftEnd + 2);
-  c.fillStyle = PALETTE.crystalDark;
-  c.fillRect(b, -2, w - b, shaftEnd + 2);
+  // Silhouette edges for each row (right edge is exclusive).
+  const left = (y) => (y >= tpl ? 0 : Math.round((apex - 1) * (1 - y / tpl)));
+  const right = (y) => (y >= tpr ? WP : Math.round(apex + 1 + (WP - apex - 1) * (y / tpr)));
+  // Occasional rocky ledges: short runs where the edge steps inward by one
+  // pixel (never outward, so the hitbox is never bigger than the art).
+  const ledges = (arr) => {
+    for (let y = 0; y < rows; y++) arr.push(0);
+    for (let y = 4; y < rows; y++) {
+      if (rnd() < 0.06) {
+        const len = 3 + Math.floor(rnd() * 4);
+        for (let k = y; k < Math.min(rows, y + len); k++) arr[k] = 1;
+        y += len + 2;
+      }
+    }
+    return arr;
+  };
+  const notchL = ledges([]), notchR = ledges([]);
+  const inside = (x, y) =>
+    y >= 0 && y < rows && x >= left(y) + notchL[y] && x < right(y) - notchR[y];
 
-  // Faint diagonal streaks on the middle facet.
-  c.save();
-  c.beginPath();
-  c.rect(a, 0, b - a, shaftEnd);
-  c.clip();
-  c.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-  c.lineWidth = 3;
-  for (let y = shaftEnd - 30; y > -60; y -= 90) {
-    c.beginPath();
-    c.moveTo(a, y + 30);
-    c.lineTo(b, y);
-    c.stroke();
+  // Jagged snow cap, deeper near the summit, with a few drips.
+  const snowLine = [];
+  for (let x = 0; x < WP; x++) {
+    const nearApex = Math.abs(x - apex) < 5 ? 3 : 0;
+    snowLine.push(11 + Math.floor(rnd() * 3) + nearApex + (rnd() < 0.18 ? 3 : 0));
   }
-  c.restore();
+  // Light comes from the upper left: the shade boundary is a ridge that
+  // runs from the summit down and to the right.
+  const ridge = (y) => apex + Math.floor(y * 0.25);
 
-  // Tip facets.
-  c.fillStyle = PALETTE.crystalLight;
-  c.beginPath();
-  c.moveTo(0, shaftEnd); c.lineTo(a, shaftEnd); c.lineTo(ax, length);
-  c.closePath(); c.fill();
-  c.fillStyle = PALETTE.crystalMid;
-  c.beginPath();
-  c.moveTo(a, shaftEnd); c.lineTo(b, shaftEnd); c.lineTo(bx, length); c.lineTo(ax, length);
-  c.closePath(); c.fill();
-  c.fillStyle = PALETTE.crystalDark;
-  c.beginPath();
-  c.moveTo(b, shaftEnd); c.lineTo(w, shaftEnd); c.lineTo(bx, length);
-  c.closePath(); c.fill();
+  // Rock strata: short dark cracks at irregular intervals.
+  const cracks = new Set();
+  for (let y = 12 + Math.floor(rnd() * 4); y < rows; y += 8 + Math.floor(rnd() * 6)) {
+    const len = 3 + Math.floor(rnd() * 6);
+    const start = Math.floor(rnd() * (WP - len));
+    for (let x = start; x < start + len; x++) cracks.add(y * WP + x);
+  }
 
-  // Collar band where the shaft meets the tip.
-  c.fillStyle = PALETTE.crystalCollar;
-  roundRectPath(c, -4, shaftEnd - 12, w + 8, 12, 3);
-  c.fill();
-  c.fillStyle = 'rgba(255, 255, 255, 0.3)';
-  c.fillRect(-2, shaftEnd - 10, w + 4, 2);
+  // 1) Base colours: lit left face, shaded right face, snow cap.
+  const grid = [];
+  for (let y = 0; y < rows; y++) {
+    const row = [];
+    for (let x = 0; x < WP; x++) {
+      if (!inside(x, y)) { row.push(null); continue; }
+      const r = ridge(y);
+      const shaded = x > r || (x === r && (x + y) % 2 === 0); // dithered ridge line
+      if (y < snowLine[x]) {
+        row.push(shaded ? PALETTE.snowShade : PALETTE.snow);
+      } else if (cracks.has(y * WP + x)) {
+        row.push(PALETTE.rockCrack);
+      } else if (x <= left(y) + notchL[y] + 1) {
+        row.push(PALETTE.rockLight);
+      } else if (x >= right(y) - notchR[y] - 2) {
+        row.push(PALETTE.rockDeep);
+      } else {
+        row.push(shaded ? PALETTE.rockShade : PALETTE.rock);
+      }
+    }
+    grid.push(row);
+  }
 
-  // Outline around the whole silhouette.
-  c.strokeStyle = PALETTE.crystalOutline;
-  c.lineWidth = 2;
-  c.beginPath();
-  c.moveTo(0, -2);
-  c.lineTo(0, shaftEnd);
-  c.lineTo(ax, length);
-  c.lineTo(bx, length);
-  c.lineTo(w, shaftEnd);
-  c.lineTo(w, -2);
-  c.stroke();
-  roundRectPath(c, -4, shaftEnd - 12, w + 8, 12, 3);
-  c.stroke();
+  // 2) A few pine trees on the slopes below the snow.
+  const snowMax = Math.max(...snowLine);
+  const treeTop = snowMax + 3;
+  const treeBottom = Math.min(rows - 8, Math.max(tpl, tpr) + 18);
+  const fits = (px, py) => {
+    for (let dy = -1; dy <= PINE.length; dy++) {
+      for (let dx = -1; dx <= 5; dx++) if (!inside(px + dx, py + dy)) return false;
+    }
+    return true;
+  };
+  const pines = 3 + Math.floor(rnd() * 3);
+  for (let i = 0; i < pines && treeBottom > treeTop; i++) {
+    const py = treeTop + Math.floor(rnd() * (treeBottom - treeTop));
+    const px = Math.floor(rnd() * (WP - 5));
+    if (!fits(px, py)) continue; // only whole trees, clear of the outline
+    for (let dy = 0; dy < PINE.length; dy++) {
+      for (let dx = 0; dx < 5; dx++) {
+        const ch = PINE[dy][dx];
+        if (ch === '.') continue;
+        grid[py + dy][px + dx] = ch === 'G' ? PALETTE.pine : ch === 'D' ? PALETTE.pineDark : PALETTE.rockCrack;
+      }
+    }
+  }
 
-  // Twinkling sparkle near the tip.
-  const tw = 0.5 + 0.5 * Math.sin(time * 4 + x * 0.05);
-  drawSparkle(c, a * 0.6, shaftEnd - 26, 3 + tw * 4, tw);
+  // 3) Dark outline wherever a pixel borders empty space (except the root).
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < WP; x++) {
+      if (!grid[y][x]) continue;
+      if (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1)) grid[y][x] = PALETTE.peakOutline;
+    }
+  }
 
+  // Paint the grid onto a tiny canvas, merging horizontal runs.
+  const cv = document.createElement('canvas');
+  cv.width = WP;
+  cv.height = rows;
+  const g = cv.getContext('2d');
+  for (let y = 0; y < rows; y++) {
+    let x = 0;
+    while (x < WP) {
+      const col = grid[y][x];
+      let end = x + 1;
+      while (end < WP && grid[y][end] === col) end++;
+      if (col) { g.fillStyle = col; g.fillRect(x, y, end - x, 1); }
+      x = end;
+    }
+  }
+  return { canvas: cv, apex, tpl, tpr, rows, WP };
+}
+
+// Draws one peak with its summit at tipY. dir = 1 grows downward (bottom
+// peak, summit on top); dir = -1 grows upward (top peak, hanging summit).
+function drawPeak(c, x, tipY, peak, dir) {
+  const P = CONFIG.obstaclePixel;
+  c.save();
+  c.imageSmoothingEnabled = false;
+  c.translate(x, tipY);
+  c.scale(1, dir);
+  c.drawImage(peak.canvas, 0, 0, peak.WP * P, peak.rows * P);
   c.restore();
 }
 
-function drawSparkle(c, x, y, size, alpha) {
-  c.save();
-  c.globalAlpha = alpha;
-  c.fillStyle = '#ffffff';
-  c.beginPath();
-  c.moveTo(x, y - size);
-  c.quadraticCurveTo(x, y, x + size, y);
-  c.quadraticCurveTo(x, y, x, y + size);
-  c.quadraticCurveTo(x, y, x - size, y);
-  c.quadraticCurveTo(x, y, x, y - size);
-  c.fill();
-  c.restore();
-}
-
-// A full obstacle: top crystal hanging from the ceiling, bottom crystal
-// growing from the ground. gapTop/gapBottom are the tip positions.
-function drawColumnPair(c, x, gapTop, gapBottom, time) {
-  // Top piece (root at y=0, tip pointing down).
-  drawCrystal(c, x, gapTop, time);
-  // Bottom piece: flip vertically around the ground line.
-  c.save();
-  c.translate(0, GROUND_Y);
-  c.scale(1, -1);
-  drawCrystal(c, x, GROUND_Y - gapBottom, time + 1.7);
-  c.restore();
+// A full obstacle: one peak hanging from the top, one rising from the
+// ground. gapTop/gapBottom are the summit positions.
+function drawColumnPair(c, col) {
+  drawPeak(c, col.x, col.gapTop, col.top, -1);
+  drawPeak(c, col.x, col.gapBottom, col.bottom, 1);
 }
 
 /* =====================================================================
@@ -823,7 +877,7 @@ function drawPanel(c, x, y, w, h) {
   c.fillStyle = PALETTE.panelSolid;
   roundRectPath(c, x, y, w, h, 18);
   c.fill();
-  c.strokeStyle = PALETTE.crystalMid;
+  c.strokeStyle = PALETTE.accentMid;
   c.lineWidth = 2;
   c.stroke();
 }
@@ -1041,28 +1095,32 @@ function spawnColumn(x) {
   const hi = Math.min(maxC, game.lastGapCenter + CONFIG.maxGapShift);
   const center = lo + Math.random() * (hi - lo);
   game.lastGapCenter = center;
+  const gapTop = center - gap / 2;
+  const gapBottom = center + gap / 2;
+  const P = CONFIG.obstaclePixel;
+  const seed = () => Math.floor(Math.random() * 1e9);
   game.columns.push({
     x,
-    gapTop: center - gap / 2,
-    gapBottom: center + gap / 2,
+    gapTop,
+    gapBottom,
     passed: false,
-    sparkle: Math.random() * 10, // desyncs the sparkle animation
+    // Each peak is unique; rows reach past the ceiling / under the ground.
+    top: makePeak(seed(), Math.ceil(gapTop / P) + 2),
+    bottom: makePeak(seed(), Math.ceil((GROUND_Y - gapBottom) / P) + 2),
   });
 }
 
-// Outline of one crystal as a polygon, matching drawCrystal(). For the
-// bottom crystal the shape is mirrored around the ground line.
-function crystalPolygon(x, length, bottom) {
-  const w = CONFIG.columnWidth;
-  const se = length - CONFIG.columnTipLength; // shaft end
-  const pts = [
-    [x, -50], [x + w, -50],
-    [x + w, se - 12], [x + w + 4, se - 12], [x + w + 4, se], [x + w, se],
-    [x + w * 0.58, length], [x + w * 0.42, length],
-    [x, se], [x - 4, se], [x - 4, se - 12], [x, se - 12],
+// Hitbox outline of one peak, matching the slopes in makePeak().
+// dir = 1 for the bottom peak (grows down from tipY), -1 for the top one.
+function peakPolygon(x, tipY, peak, dir) {
+  const P = CONFIG.obstaclePixel;
+  const far = (peak.rows + 20) * P;
+  const pt = (ax, ay) => [x + ax * P, tipY + dir * ay * P];
+  return [
+    pt(peak.apex - 1, 0), pt(peak.apex + 1, 0),
+    pt(peak.WP, peak.tpr), [x + peak.WP * P, tipY + dir * far],
+    [x, tipY + dir * far], pt(0, peak.tpl),
   ];
-  if (bottom) for (const p of pts) p[1] = GROUND_Y - p[1];
-  return pts;
 }
 
 /* =====================================================================
@@ -1090,10 +1148,10 @@ function circleHitsPolygon(cx, cy, r, pts) {
 
 function hitsColumn(col, cx, cy, r) {
   const w = CONFIG.columnWidth;
-  if (cx + r < col.x - 4 || cx - r > col.x + w + 4) return false; // quick reject
+  if (cx + r < col.x || cx - r > col.x + w) return false; // quick reject
   return (
-    circleHitsPolygon(cx, cy, r, crystalPolygon(col.x, col.gapTop, false)) ||
-    circleHitsPolygon(cx, cy, r, crystalPolygon(col.x, GROUND_Y - col.gapBottom, true))
+    circleHitsPolygon(cx, cy, r, peakPolygon(col.x, col.gapTop, col.top, -1)) ||
+    circleHitsPolygon(cx, cy, r, peakPolygon(col.x, col.gapBottom, col.bottom, 1))
   );
 }
 
@@ -1174,7 +1232,7 @@ function update(dt) {
         }
       }
 
-      // Collisions: ground, ceiling, crystals.
+      // Collisions: ground, ceiling, peaks.
       const hr = R - CONFIG.hitboxForgiveness;
       if (p.y + R >= GROUND_Y) {
         p.y = GROUND_Y - R;
@@ -1214,12 +1272,12 @@ function update(dt) {
    ===================================================================== */
 function drawReadyScreen(c) {
   drawText(c, 'CLUTCH', W / 2, 150, 62);
-  drawText(c, 'Fly the Mountain Hawk through the crystals', W / 2, 202, 18);
+  drawText(c, 'Fly the Mountain Hawk between the peaks', W / 2, 202, 18);
 
   drawPanel(c, 90, 400, W - 180, 130);
   const pulse = 0.6 + 0.4 * Math.sin(game.time * 4);
   c.globalAlpha = pulse;
-  drawSmallText(c, 'Tap, click or Space to flap', W / 2, 432, 18, PALETTE.crystalLight);
+  drawSmallText(c, 'Tap, click or Space to flap', W / 2, 432, 18, PALETTE.accentLight);
   c.globalAlpha = 1;
   drawSmallText(c, 'M to mute', W / 2, 462, 14);
   drawSmallText(c, `Best: ${game.best}`, W / 2, 498, 20, PALETTE.gold);
@@ -1238,8 +1296,8 @@ function drawGameOverScreen(c) {
   drawPanel(c, 70, y0, W - 140, 270);
   drawText(c, 'GAME OVER', W / 2, y0 + 48, 40);
 
-  drawSmallText(c, 'SCORE', W / 2 - 80, y0 + 105, 15, PALETTE.crystalLight);
-  drawSmallText(c, 'BEST', W / 2 + 80, y0 + 105, 15, PALETTE.crystalLight);
+  drawSmallText(c, 'SCORE', W / 2 - 80, y0 + 105, 15, PALETTE.accentLight);
+  drawSmallText(c, 'BEST', W / 2 + 80, y0 + 105, 15, PALETTE.accentLight);
   drawText(c, game.score, W / 2 - 80, y0 + 145, 44);
   drawText(c, game.best, W / 2 + 80, y0 + 145, 44, PALETTE.gold);
 
@@ -1248,13 +1306,13 @@ function drawGameOverScreen(c) {
     c.save();
     c.translate(W / 2, y0 + 192);
     c.scale(s, s);
-    drawText(c, 'NEW BEST!', 0, 0, 22, PALETTE.crystalMid);
+    drawText(c, 'NEW BEST!', 0, 0, 22, PALETTE.accentMid);
     c.restore();
   }
 
   if (game.overTimer >= CONFIG.restartDelay) {
     c.globalAlpha = 0.6 + 0.4 * Math.sin(game.time * 4);
-    drawSmallText(c, 'Tap or Space to retry', W / 2, y0 + 240, 17, PALETTE.crystalLight);
+    drawSmallText(c, 'Tap or Space to retry', W / 2, y0 + 240, 17, PALETTE.accentLight);
     c.globalAlpha = 1;
   }
 }
@@ -1270,7 +1328,7 @@ function render(c) {
 
   drawBackground(c, game.time, game.scroll);
   for (const col of game.columns) {
-    drawColumnPair(c, col.x, col.gapTop, col.gapBottom, game.time + col.sparkle);
+    drawColumnPair(c, col);
   }
   drawGround(c, game.scroll);
 
