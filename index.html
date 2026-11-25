@@ -70,7 +70,6 @@ const CONFIG = {
 
   // How fast each background layer moves relative to the ground (0..1).
   parallax: {
-    stars: 0.02,
     clouds: 0.12,
     farRidge: 0.2,
     midRidge: 0.35,
@@ -80,51 +79,18 @@ const CONFIG = {
 
   // Obstacle look
   columnWidth: 78,
-  obstaclePixel: 3,       // size of one art pixel on the mountain peaks (logical px)
+  pixelSize: 3,           // size of one art pixel for the peaks and scenery (logical px)
 
   // Player look
   playerRadius: 18,
 };
 
-/* Colour palette: dusk sky, pixel-art mountain peaks, brown-and-white hawk. */
+/* Colour palette for Clutch and the UI. Scenery and peak colours for the
+   day and night themes live in THEMES further down. */
 const PALETTE = {
-  skyTop: '#1d1540',
-  skyMid: '#5b2a6e',
-  skyLow: '#c8577a',
-  skyHorizon: '#f6a97a',
-  star: '#fff4e0',
-  sun: '#ffd39b',
-  sunGlow: 'rgba(255, 200, 140, 0.35)',
-
-  cloud: '#ffc9c0',
-  cloudShade: '#e3929f',
-
-  farRidge: '#b56b8b',
-  midRidge: '#7a3f78',
-  nearRidge: '#4a2a5e',
-
-  // Mountain peaks (pixel art, outlined like Clutch's sprite).
-  rock: '#9a6f56',
-  rockLight: '#c49a76',
-  rockShade: '#6e4c3c',
-  rockDeep: '#4e3529',
-  rockCrack: '#3b2820',
-  snow: '#f7f9fc',
-  snowShade: '#c3cfe2',
-  pine: '#4f9a5a',
-  pineDark: '#2c5e36',
-  peakOutline: '#2a1610',
-
-  // UI accents
-  accentLight: '#b8fff2',
-  accentMid: '#46e0c8',
-
-  groundDark: '#2e1a3a',
-  groundStripe: '#3a2148',
-  mossLight: '#9ff5e1',
-  moss: '#3fcfb2',
-  mossShade: '#23947f',
-  pebble: '#46e0c8',
+  // UI accents (Lehigh brown and gold)
+  accentLight: '#ffe6a8',
+  accentMid: '#ffc93a',
 
   // Clutch the Mountain Hawk: brown and white with a gold beak.
   hawkBody: '#6b3a1a',
@@ -142,10 +108,10 @@ const PALETTE = {
   gold: '#ffd36b',
 
   text: '#fff1dc',
-  textOutline: '#2a1640',
-  panel: 'rgba(24, 14, 44, 0.72)',
-  panelSolid: 'rgba(24, 14, 44, 0.9)',
-  dim: 'rgba(18, 10, 36, 0.35)',
+  textOutline: '#2a1610',
+  panel: 'rgba(43, 26, 16, 0.72)',
+  panelSolid: 'rgba(43, 26, 16, 0.92)',
+  dim: 'rgba(20, 12, 6, 0.35)',
 };
 
 const W = CONFIG.width;
@@ -206,27 +172,205 @@ function wrap(v, m) {
 }
 
 /* =====================================================================
-   Pre-generated scenery
+   Themes — day (light) and night (dark). All scenery colours live here.
    ===================================================================== */
-const SCENERY_TILE = 960; // every background layer repeats every 960px
-const rand = mulberry32(1337);
+const THEMES = {
+  light: {
+    page: '#9fd3f5',                       // page colour around the game
+    sky: ['#4a94dc', '#5aa4e6', '#6db4ee', '#84c4f4', '#9dd3f8', '#b9e2fb'], // top → horizon
+    sun: '#ffe066', sunCore: '#fff6c2', sunRim: '#f5b82e',
+    cloud: '#ffffff', cloudShade: '#d6eaf8', cloudOutline: '#8db6dc', cloudAlpha: 1,
+    far: '#8fb7d6', farTop: '#a9cbe4', farSnow: '#eef6fc',
+    mid: '#76b884', midTop: '#93cf9c', midOutline: '#4f8f5e',
+    near: '#4f9a5a', nearTop: '#6cb86a', nearOutline: '#2c5e36',
+    tree: '#2f7a3e', treeDark: '#1f5a2c',
+    grass: '#5cb84a', grassLight: '#8fd46a', grassDark: '#3a8a34',
+    dirt: '#9a6a44', dirtLight: '#b8875a', dirtDark: '#6e4a2e',
+    stone: '#c9b597', stoneDark: '#8f7c64',
+    peak: {
+      rock: '#9a6f56', rockLight: '#c49a76', rockShade: '#6e4c3c', rockDeep: '#4e3529',
+      rockCrack: '#3b2820', snow: '#f7f9fc', snowShade: '#c3cfe2',
+      pine: '#4f9a5a', pineDark: '#2c5e36', peakOutline: '#2a1610',
+    },
+  },
+  dark: {
+    page: '#05071a',
+    sky: ['#04061a', '#070b23', '#0b112d', '#101838', '#152044', '#1b2952'],
+    moon: '#eef0dc', moonShade: '#c6c8b0', moonCrater: '#aeb098', moonGlow: '#22305e',
+    star: '#fff8e0',
+    cloud: '#3d4a78', cloudShade: '#2d3862', cloudOutline: '#1a2142', cloudAlpha: 0.9,
+    far: '#18224a', farTop: '#212d5a', farSnow: '#55628e',
+    mid: '#173a36', midTop: '#1f4a40', midOutline: '#0c2420',
+    near: '#1d4a2c', nearTop: '#285e38', nearOutline: '#0b2414',
+    tree: '#163e22', treeDark: '#0c2816',
+    grass: '#2f6e34', grassLight: '#46904a', grassDark: '#1c4a20',
+    dirt: '#4a3222', dirtLight: '#5e412c', dirtDark: '#2e1e13',
+    stone: '#6e6252', stoneDark: '#463c30',
+    peak: {
+      rock: '#6a5048', rockLight: '#86685a', rockShade: '#4a3632', rockDeep: '#352628',
+      rockCrack: '#241a1a', snow: '#c8d2ea', snowShade: '#8e9cc0',
+      pine: '#2f6a40', pineDark: '#1a3e26', peakOutline: '#140c0a',
+    },
+  },
+};
 
-const STARS = Array.from({ length: 70 }, () => ({
-  x: rand() * SCENERY_TILE,
-  y: rand() * 300,
-  r: 0.6 + rand() * 1.3,
-  phase: rand() * Math.PI * 2,
-  speed: 1 + rand() * 2.5,
+// Current theme. A saved choice wins; otherwise follow the device setting.
+const THEME_KEY = 'flap-game.theme';
+let themeName = (() => {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch (e) { /* storage unavailable */ }
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+})();
+const theme = () => THEMES[themeName];
+
+function applyPageColour() {
+  document.documentElement.style.background = theme().page;
+  document.body.style.background = theme().page;
+}
+
+function toggleTheme() {
+  themeName = themeName === 'light' ? 'dark' : 'light';
+  try { localStorage.setItem(THEME_KEY, themeName); } catch (e) { /* ignore */ }
+  applyPageColour();
+}
+applyPageColour();
+
+/* =====================================================================
+   Pixel-art scenery. Every layer is painted once per theme at "art
+   resolution" (1 art pixel = CONFIG.pixelSize logical px) onto a small
+   offscreen canvas, then drawn scaled up without smoothing — the same
+   chunky look as Clutch and the peaks.
+   ===================================================================== */
+const PX = CONFIG.pixelSize;
+const ART_W = W / PX;                         // 160 art px across the screen
+const SKY_ROWS = GROUND_Y / PX;               // 208 rows of sky down to the ground
+const GROUND_ROWS = CONFIG.groundHeight / PX; // 32 rows of grass and dirt
+const BLADE_ROWS = 3;                         // grass blades poke above the ground line
+const SCENERY_TILE = 960;                     // hills repeat every 960 logical px
+const TILE_ART = SCENERY_TILE / PX;
+
+// Small canvas plus a one-pixel "plot" helper.
+function pixelCanvas(w, h) {
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const g = cv.getContext('2d');
+  const plot = (x, y, colour) => { g.fillStyle = colour; g.fillRect(x, y, 1, 1); };
+  return { cv, g, plot };
+}
+
+// Sky: flat colour bands with a dithered seam between each, plus the sun
+// (day) or the moon with a soft dithered glow (night).
+function buildSky(T, night) {
+  const { cv, g, plot } = pixelCanvas(ART_W, SKY_ROWS);
+  const bands = T.sky.length;
+  const bandH = Math.ceil(SKY_ROWS / bands);
+  for (let y = 0; y < SKY_ROWS; y++) {
+    const i = Math.min(bands - 1, Math.floor(y / bandH));
+    g.fillStyle = T.sky[i];
+    g.fillRect(0, y, ART_W, 1);
+    if (i < bands - 1 && y % bandH >= bandH - 3) {
+      // Checkerboard of the next band's colour, denser toward it.
+      const step = y % bandH === bandH - 1 ? 1 : 2;
+      for (let x = (y % 2); x < ART_W; x += step * 2) plot(x, y, T.sky[i + 1]);
+    }
+  }
+
+  const cx = 112, cy = 40;
+  if (!night) {
+    const r = 11;
+    // Eight short rays.
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      for (let d = r + 3; d <= r + 5; d++) {
+        plot(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d), T.sun);
+      }
+    }
+    for (let y = -r; y <= r; y++) {
+      for (let x = -r; x <= r; x++) {
+        const d = Math.hypot(x, y);
+        if (d > r + 0.3) continue;
+        plot(cx + x, cy + y, d > r - 1.2 ? T.sunRim : d < r * 0.55 ? T.sunCore : T.sun);
+      }
+    }
+  } else {
+    const r = 10;
+    for (let y = -r - 5; y <= r + 5; y++) {
+      for (let x = -r - 5; x <= r + 5; x++) {
+        const d = Math.hypot(x, y);
+        if (d > r + 0.3 && d < r + 5 && (x + y) % 2 === 0) plot(cx + x, cy + y, T.moonGlow);
+      }
+    }
+    const craters = [[-3, 3, 2.2], [3, -4, 1.6], [4, 4, 1.1], [-5, -3, 1]];
+    for (let y = -r; y <= r; y++) {
+      for (let x = -r; x <= r; x++) {
+        if (Math.hypot(x, y) > r + 0.3) continue;
+        let col = T.moon;
+        if (Math.hypot(x + 3, y + 2) > r) col = T.moonShade;       // shaded lower-right rim
+        for (const [kx, ky, kr] of craters) if (Math.hypot(x - kx, y - ky) <= kr) col = T.moonCrater;
+        plot(cx + x, cy + y, col);
+      }
+    }
+  }
+  return cv;
+}
+
+// Twinkling night stars, on the pixel grid (drawn live, not pre-rendered).
+const starRand = mulberry32(4242);
+const STARS = Array.from({ length: 55 }, () => ({
+  x: Math.floor(starRand() * ART_W),
+  y: Math.floor(starRand() * 120),
+  big: starRand() < 0.18,
+  phase: starRand() * Math.PI * 2,
+  speed: 1 + starRand() * 2.5,
 }));
 
-const CLOUDS = Array.from({ length: 7 }, (_, i) => ({
-  x: (i / 7) * SCENERY_TILE + rand() * 80,
-  y: 90 + rand() * 230,
-  s: 0.6 + rand() * 0.7,
+function drawStars(c, time) {
+  c.fillStyle = theme().star;
+  for (const s of STARS) {
+    if (Math.hypot(s.x - 112, s.y - 40) < 17) continue; // keep clear of the moon
+    c.globalAlpha = (0.45 + 0.55 * Math.sin(time * s.speed + s.phase)) * (1 - s.y / 150);
+    c.fillRect(s.x * PX, s.y * PX, PX, PX);
+    if (s.big) {
+      c.globalAlpha *= 0.6;
+      c.fillRect((s.x - 1) * PX, s.y * PX, PX, PX);
+      c.fillRect((s.x + 1) * PX, s.y * PX, PX, PX);
+      c.fillRect(s.x * PX, (s.y - 1) * PX, PX, PX);
+      c.fillRect(s.x * PX, (s.y + 1) * PX, PX, PX);
+    }
+  }
+  c.globalAlpha = 1;
+}
+
+// Puffy pixel cloud with a flat base, shaded underside and outline.
+function buildCloud(T, s) {
+  const puffs = [[0, 0, 7], [8, -3, 9], [17, -1, 7], [24, 2, 5], [-7, 2, 5]]
+    .map(([x, y, r]) => [x * s, y * s, r * s]);
+  const minX = Math.floor(-12 * s) - 1, maxX = Math.ceil(30 * s) + 1;
+  const minY = Math.floor(-12 * s) - 1, base = Math.round(5 * s);
+  const w = maxX - minX + 1, h = base - minY + 1;
+  const inside = (x, y) => y <= base && puffs.some(([px, py, r]) => Math.hypot(x - px, y - py) <= r);
+  const { cv, plot } = pixelCanvas(w, h);
+  for (let y = minY; y <= base; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      if (!inside(x, y)) continue;
+      const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+      plot(x - minX, y - minY, edge ? T.cloudOutline : y >= base - 2 ? T.cloudShade : T.cloud);
+    }
+  }
+  return cv;
+}
+
+const cloudRand = mulberry32(777);
+const CLOUDS = Array.from({ length: 6 }, (_, i) => ({
+  x: (i / 6) * SCENERY_TILE + cloudRand() * 80,
+  y: 70 + cloudRand() * 230,
+  v: i % 3, // which cloud shape (size) to use
 }));
 
-// A ridge is a list of heights sampled every RIDGE_STEP px across one tile.
-// Integer frequencies make each layer tile seamlessly.
+// Height (logical y) of a ridge at logical x, from its sampled points.
 const RIDGE_STEP = 8;
 function makeRidge(baseY, waves, peaky) {
   const pts = [];
@@ -241,179 +385,153 @@ function makeRidge(baseY, waves, peaky) {
   }
   return pts;
 }
+function ridgeAt(pts, x) {
+  const tx = wrap(x, SCENERY_TILE);
+  const i = Math.floor(tx / RIDGE_STEP);
+  const t = (tx - i * RIDGE_STEP) / RIDGE_STEP;
+  return pts[i] + (pts[i + 1] - pts[i]) * t;
+}
 const FAR_RIDGE = makeRidge(520, [[3, 70, 0.4], [7, 30, 1.1], [17, 10, 0.2]], true);
 const MID_RIDGE = makeRidge(575, [[2, 26, 0.9], [5, 14, 2.0], [11, 5, 0.5]], false);
 const NEAR_RIDGE = makeRidge(612, [[3, 18, 2.4], [7, 8, 0.3]], false);
 
-// Crystal pebbles embedded in the ground strip (repeat every 240px).
-const PEBBLE_TILE = 240;
-const PEBBLES = Array.from({ length: 6 }, () => ({
-  x: rand() * PEBBLE_TILE,
-  y: GROUND_Y + 30 + rand() * (CONFIG.groundHeight - 44),
-  s: 2 + rand() * 3,
-}));
+// One ridge layer as a strip wide enough to scroll seamlessly (one tile
+// plus a screen). opts: fill / top / outline colours, snowy peaks, trees.
+function buildRidge(pts, opts) {
+  const width = TILE_ART + ART_W;
+  const { cv, g, plot } = pixelCanvas(width, SKY_ROWS);
+  const tops = [];
+  for (let ax = 0; ax < width; ax++) tops.push(Math.round(ridgeAt(pts, ax * PX + PX / 2) / PX));
+  const highest = Math.min(...tops);
+  const rnd = mulberry32(opts.seed);
+  for (let ax = 0; ax < width; ax++) {
+    const ty = tops[ax];
+    g.fillStyle = opts.fill;
+    g.fillRect(ax, ty, 1, SKY_ROWS - ty);
+    plot(ax, ty + 1, opts.top);
+    if (opts.snow && ty < highest + 9) {
+      for (let k = 0; k < 3; k++) plot(ax, ty + k, opts.snow);
+    }
+    plot(ax, ty, opts.outline || opts.top);
+  }
+  // Round pixel trees along the ridge line (kept off the strip ends so
+  // the pattern repeats cleanly).
+  if (opts.trees) {
+    for (let ax = 4; ax < TILE_ART - 4; ax += 5 + Math.floor(rnd() * 9)) {
+      const ty = Math.max(tops[ax - 1], tops[ax], tops[ax + 1]);
+      for (const copy of [0, TILE_ART]) {
+        if (ax + copy + 1 >= width) continue;
+        const x = ax + copy;
+        plot(x, ty - 3, opts.outline);
+        plot(x - 1, ty - 2, opts.outline); plot(x, ty - 2, opts.trees[0]); plot(x + 1, ty - 2, opts.outline);
+        plot(x - 1, ty - 1, opts.outline); plot(x, ty - 1, opts.trees[1]); plot(x + 1, ty - 1, opts.outline);
+        plot(x, ty, opts.outline);
+      }
+    }
+  }
+  return cv;
+}
+
+// Ground strip: grass blades and turf on top, layered dirt with pebbles
+// below. Painted as one repeating tile, then copied across a strip.
+const GROUND_TILE = 32; // art px
+function buildGround(T) {
+  const rnd = mulberry32(99);
+  const rows = GROUND_ROWS + BLADE_ROWS;
+  const tile = pixelCanvas(GROUND_TILE, rows);
+  const { g, plot } = tile;
+  for (let x = 0; x < GROUND_TILE; x++) {
+    const blade = Math.floor(rnd() * 3);                    // 0..2 px tall
+    const hang = rnd() < 0.3 ? 1 : rnd() < 0.15 ? 2 : 0;     // turf hanging into dirt
+    const turfEnd = BLADE_ROWS + 5 + hang;
+    // Dirt, darkening with depth.
+    for (let y = turfEnd; y < rows; y++) {
+      let col = T.dirt;
+      if (y > rows - 6 || (y > rows - 12 && (x + y) % 2 === 0)) col = T.dirtDark;
+      plot(x, y, col);
+    }
+    // Turf with a dark top edge and dark lower lip.
+    const top = BLADE_ROWS - blade;
+    for (let y = top; y < turfEnd; y++) plot(x, y, T.grass);
+    plot(x, top, T.grassDark);
+    plot(x, top + 1, T.grassLight);
+    plot(x, turfEnd - 1, T.grassDark);
+  }
+  // Light specks and small stones in the dirt.
+  for (let i = 0; i < 16; i++) {
+    plot(Math.floor(rnd() * GROUND_TILE), BLADE_ROWS + 9 + Math.floor(rnd() * 16), T.dirtLight);
+  }
+  for (let i = 0; i < 3; i++) {
+    const sx = 1 + Math.floor(rnd() * (GROUND_TILE - 4));
+    const sy = BLADE_ROWS + 11 + Math.floor(rnd() * 12);
+    g.fillStyle = T.stone;
+    g.fillRect(sx, sy, 3, 2);
+    plot(sx + 2, sy + 1, T.stoneDark);
+    plot(sx, sy + 2, T.stoneDark); plot(sx + 1, sy + 2, T.stoneDark); plot(sx + 2, sy + 2, T.stoneDark);
+  }
+  // Copy the tile across a strip one screen + one tile wide.
+  const width = ART_W + GROUND_TILE;
+  const strip = pixelCanvas(width, rows);
+  for (let x = 0; x < width; x += GROUND_TILE) strip.g.drawImage(tile.cv, x, 0);
+  return strip.cv;
+}
+
+// Pre-render every layer for both themes.
+function buildScenery(T, night) {
+  return {
+    sky: buildSky(T, night),
+    clouds: [0.8, 1, 1.25].map((s) => buildCloud(T, s)),
+    far: buildRidge(FAR_RIDGE, { fill: T.far, top: T.farTop, snow: T.farSnow, seed: 1 }),
+    mid: buildRidge(MID_RIDGE, { fill: T.mid, top: T.midTop, outline: T.midOutline, seed: 2 }),
+    near: buildRidge(NEAR_RIDGE, {
+      fill: T.near, top: T.nearTop, outline: T.nearOutline, trees: [T.tree, T.treeDark], seed: 3,
+    }),
+    ground: buildGround(T),
+  };
+}
+const SCENERY = { light: buildScenery(THEMES.light, false), dark: buildScenery(THEMES.dark, true) };
 
 /* =====================================================================
-   Draw functions — background layers
+   Draw functions — background layers and ground
    ===================================================================== */
 
-function drawSky(c, time, scroll) {
-  const g = c.createLinearGradient(0, 0, 0, GROUND_Y);
-  g.addColorStop(0, PALETTE.skyTop);
-  g.addColorStop(0.45, PALETTE.skyMid);
-  g.addColorStop(0.78, PALETTE.skyLow);
-  g.addColorStop(1, PALETTE.skyHorizon);
-  c.fillStyle = g;
-  c.fillRect(0, 0, W, GROUND_Y);
-
-  // Twinkling stars, fading out toward the horizon.
-  const off = wrap(scroll * CONFIG.parallax.stars, SCENERY_TILE);
-  c.fillStyle = PALETTE.star;
-  for (const s of STARS) {
-    const x = wrap(s.x - off, SCENERY_TILE);
-    if (x > W) continue;
-    const twinkle = 0.55 + 0.45 * Math.sin(time * s.speed + s.phase);
-    c.globalAlpha = twinkle * (1 - s.y / 330);
-    c.beginPath();
-    c.arc(x, s.y, s.r, 0, Math.PI * 2);
-    c.fill();
-  }
-  c.globalAlpha = 1;
+// Draws a pre-rendered pixel canvas at logical position, scaled by PX.
+function blit(c, img, x, y) {
+  c.drawImage(img, x, y, img.width * PX, img.height * PX);
 }
 
-function drawSun(c) {
-  const x = 330, y = 470, r = 62;
-  const glow = c.createRadialGradient(x, y, r * 0.8, x, y, r * 2.6);
-  glow.addColorStop(0, PALETTE.sunGlow);
-  glow.addColorStop(1, 'rgba(255, 200, 140, 0)');
-  c.fillStyle = glow;
-  c.fillRect(x - r * 3, y - r * 3, r * 6, r * 6);
-  c.fillStyle = PALETTE.sun;
-  c.beginPath();
-  c.arc(x, y, r, 0, Math.PI * 2);
-  c.fill();
-  // Horizontal bands cut into the sun for a retro dusk look.
-  c.fillStyle = PALETTE.skyLow;
-  for (let i = 0; i < 4; i++) {
-    c.fillRect(x - r, y + 12 + i * 13, r * 2, 2 + i * 1.5);
-  }
-}
-
-function drawCloud(c, x, y, s) {
-  const puffs = [[0, 0, 22], [24, -10, 26], [52, -2, 20], [72, 6, 14], [-20, 8, 14]];
-  c.fillStyle = PALETTE.cloudShade;
-  for (const [px, py, r] of puffs) {
-    c.beginPath();
-    c.arc(x + px * s, y + py * s + 5 * s, r * s, 0, Math.PI * 2);
-    c.fill();
-  }
-  c.fillStyle = PALETTE.cloud;
-  for (const [px, py, r] of puffs) {
-    c.beginPath();
-    c.arc(x + px * s, y + py * s, r * s, 0, Math.PI * 2);
-    c.fill();
-  }
-}
-
-function drawClouds(c, scroll) {
-  const off = wrap(scroll * CONFIG.parallax.clouds, SCENERY_TILE);
-  c.globalAlpha = 0.8;
-  for (const cl of CLOUDS) {
-    // Draw twice so clouds wrap smoothly across the tile seam.
-    let x = wrap(cl.x - off, SCENERY_TILE) - 100;
-    drawCloud(c, x, cl.y, cl.s);
-    if (x + 200 > SCENERY_TILE - W) drawCloud(c, x - SCENERY_TILE, cl.y, cl.s);
-  }
-  c.globalAlpha = 1;
-}
-
-function drawRidge(c, pts, scroll, factor, color) {
-  const off = wrap(scroll * factor, SCENERY_TILE);
-  c.fillStyle = color;
-  c.beginPath();
-  c.moveTo(0, GROUND_Y);
-  for (let x = 0; x <= W + RIDGE_STEP; x += RIDGE_STEP) {
-    const tx = wrap(x + off, SCENERY_TILE);
-    const i = Math.floor(tx / RIDGE_STEP);
-    const t = (tx - i * RIDGE_STEP) / RIDGE_STEP;
-    const y = pts[i] + (pts[i + 1] - pts[i]) * t; // linear interpolation
-    c.lineTo(x, y);
-  }
-  c.lineTo(W + RIDGE_STEP, GROUND_Y);
-  c.closePath();
-  c.fill();
+function drawRidgeLayer(c, img, scroll, factor) {
+  blit(c, img, -wrap(scroll * factor, SCENERY_TILE), 0);
 }
 
 function drawBackground(c, time, scroll) {
-  drawSky(c, time, scroll);
-  drawSun(c);
-  drawClouds(c, scroll);
-  drawRidge(c, FAR_RIDGE, scroll, CONFIG.parallax.farRidge, PALETTE.farRidge);
-  drawRidge(c, MID_RIDGE, scroll, CONFIG.parallax.midRidge, PALETTE.midRidge);
-  drawRidge(c, NEAR_RIDGE, scroll, CONFIG.parallax.nearRidge, PALETTE.nearRidge);
+  const S = SCENERY[themeName];
+  c.save();
+  c.imageSmoothingEnabled = false;
+  blit(c, S.sky, 0, 0);
+  if (themeName === 'dark') drawStars(c, time);
+
+  const cloudOff = wrap(scroll * CONFIG.parallax.clouds, SCENERY_TILE);
+  c.globalAlpha = theme().cloudAlpha;
+  for (const cl of CLOUDS) {
+    const img = S.clouds[cl.v];
+    const x = wrap(cl.x - cloudOff, SCENERY_TILE) - 100;
+    blit(c, img, x, cl.y);
+    if (x + img.width * PX > SCENERY_TILE - 100) blit(c, img, x - SCENERY_TILE, cl.y);
+  }
+  c.globalAlpha = 1;
+
+  drawRidgeLayer(c, S.far, scroll, CONFIG.parallax.farRidge);
+  drawRidgeLayer(c, S.mid, scroll, CONFIG.parallax.midRidge);
+  drawRidgeLayer(c, S.near, scroll, CONFIG.parallax.nearRidge);
+  c.restore();
 }
 
-/* =====================================================================
-   Draw functions — ground strip
-   ===================================================================== */
 function drawGround(c, scroll) {
-  const off = wrap(scroll * CONFIG.parallax.ground, 40);
-  const gh = CONFIG.groundHeight;
-
-  c.fillStyle = PALETTE.groundDark;
-  c.fillRect(0, GROUND_Y, W, gh);
-
-  // Diagonal rock stripes that scroll with the world.
   c.save();
-  c.beginPath();
-  c.rect(0, GROUND_Y + 12, W, gh);
-  c.clip();
-  c.fillStyle = PALETTE.groundStripe;
-  for (let x = -off - 40; x < W + 60; x += 40) {
-    c.beginPath();
-    c.moveTo(x, H);
-    c.lineTo(x + 18, H);
-    c.lineTo(x + 18 + gh, GROUND_Y);
-    c.lineTo(x + gh, GROUND_Y);
-    c.closePath();
-    c.fill();
-  }
+  c.imageSmoothingEnabled = false;
+  blit(c, SCENERY[themeName].ground, -wrap(scroll, GROUND_TILE * PX), GROUND_Y - BLADE_ROWS * PX);
   c.restore();
-
-  // Tiny crystal pebbles.
-  const pOff = wrap(scroll, PEBBLE_TILE);
-  c.fillStyle = PALETTE.pebble;
-  for (let k = 0; k < 3; k++) {
-    for (const p of PEBBLES) {
-      const x = p.x - pOff + k * PEBBLE_TILE;
-      if (x < -10 || x > W + 10) continue;
-      c.beginPath();
-      c.moveTo(x, p.y - p.s * 1.6);
-      c.lineTo(x + p.s, p.y);
-      c.lineTo(x, p.y + p.s * 0.8);
-      c.lineTo(x - p.s, p.y);
-      c.closePath();
-      c.fill();
-    }
-  }
-
-  // Mossy top edge with scalloped underside.
-  const sOff = wrap(scroll, 20);
-  c.fillStyle = PALETTE.mossShade;
-  for (let x = -sOff - 20; x < W + 20; x += 20) {
-    c.beginPath();
-    c.arc(x + 10, GROUND_Y + 14, 7, 0, Math.PI);
-    c.fill();
-  }
-  c.fillStyle = PALETTE.moss;
-  c.fillRect(0, GROUND_Y, W, 13);
-  for (let x = -sOff - 20; x < W + 20; x += 20) {
-    c.beginPath();
-    c.arc(x + 10, GROUND_Y + 11, 7, 0, Math.PI);
-    c.fill();
-  }
-  c.fillStyle = PALETTE.mossLight;
-  c.fillRect(0, GROUND_Y, W, 3);
 }
 
 /* =====================================================================
@@ -433,7 +551,7 @@ const PINE = ['..G..', '.GGD.', 'GGGDD', '.GGD.', 'GGGDD', '..T..'];
  */
 function makePeak(seed, rows) {
   const rnd = mulberry32(seed);
-  const WP = Math.round(CONFIG.columnWidth / CONFIG.obstaclePixel); // width in art pixels
+  const WP = Math.round(CONFIG.columnWidth / CONFIG.pixelSize); // width in art pixels
   const apex = Math.round(WP / 2 + (rnd() * 2 - 1) * 3);  // summit column, a bit off-centre
   const tpl = 22 + Math.floor(rnd() * 10);  // rows until the left slope reaches full width
   const tpr = 22 + Math.floor(rnd() * 10);  // same for the right slope
@@ -485,15 +603,15 @@ function makePeak(seed, rows) {
       const r = ridge(y);
       const shaded = x > r || (x === r && (x + y) % 2 === 0); // dithered ridge line
       if (y < snowLine[x]) {
-        row.push(shaded ? PALETTE.snowShade : PALETTE.snow);
+        row.push(shaded ? 'snowShade' : 'snow');
       } else if (cracks.has(y * WP + x)) {
-        row.push(PALETTE.rockCrack);
+        row.push('rockCrack');
       } else if (x <= left(y) + notchL[y] + 1) {
-        row.push(PALETTE.rockLight);
+        row.push('rockLight');
       } else if (x >= right(y) - notchR[y] - 2) {
-        row.push(PALETTE.rockDeep);
+        row.push('rockDeep');
       } else {
-        row.push(shaded ? PALETTE.rockShade : PALETTE.rock);
+        row.push(shaded ? 'rockShade' : 'rock');
       }
     }
     grid.push(row);
@@ -518,7 +636,7 @@ function makePeak(seed, rows) {
       for (let dx = 0; dx < 5; dx++) {
         const ch = PINE[dy][dx];
         if (ch === '.') continue;
-        grid[py + dy][px + dx] = ch === 'G' ? PALETTE.pine : ch === 'D' ? PALETTE.pineDark : PALETTE.rockCrack;
+        grid[py + dy][px + dx] = ch === 'G' ? 'pine' : ch === 'D' ? 'pineDark' : 'rockCrack';
       }
     }
   }
@@ -527,37 +645,42 @@ function makePeak(seed, rows) {
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < WP; x++) {
       if (!grid[y][x]) continue;
-      if (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1)) grid[y][x] = PALETTE.peakOutline;
+      if (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1)) grid[y][x] = 'peakOutline';
     }
   }
 
-  // Paint the grid onto a tiny canvas, merging horizontal runs.
-  const cv = document.createElement('canvas');
-  cv.width = WP;
-  cv.height = rows;
-  const g = cv.getContext('2d');
-  for (let y = 0; y < rows; y++) {
-    let x = 0;
-    while (x < WP) {
-      const col = grid[y][x];
-      let end = x + 1;
-      while (end < WP && grid[y][end] === col) end++;
-      if (col) { g.fillStyle = col; g.fillRect(x, y, end - x, 1); }
-      x = end;
+  // Paint the grid (which holds colour names) once per theme onto tiny
+  // canvases, merging horizontal runs of the same colour.
+  const paint = (colours) => {
+    const cv = document.createElement('canvas');
+    cv.width = WP;
+    cv.height = rows;
+    const g = cv.getContext('2d');
+    for (let y = 0; y < rows; y++) {
+      let x = 0;
+      while (x < WP) {
+        const key = grid[y][x];
+        let end = x + 1;
+        while (end < WP && grid[y][end] === key) end++;
+        if (key) { g.fillStyle = colours[key]; g.fillRect(x, y, end - x, 1); }
+        x = end;
+      }
     }
-  }
-  return { canvas: cv, apex, tpl, tpr, rows, WP };
+    return cv;
+  };
+  const canvases = { light: paint(THEMES.light.peak), dark: paint(THEMES.dark.peak) };
+  return { canvases, apex, tpl, tpr, rows, WP };
 }
 
 // Draws one peak with its summit at tipY. dir = 1 grows downward (bottom
 // peak, summit on top); dir = -1 grows upward (top peak, hanging summit).
 function drawPeak(c, x, tipY, peak, dir) {
-  const P = CONFIG.obstaclePixel;
+  const P = CONFIG.pixelSize;
   c.save();
   c.imageSmoothingEnabled = false;
   c.translate(x, tipY);
   c.scale(1, dir);
-  c.drawImage(peak.canvas, 0, 0, peak.WP * P, peak.rows * P);
+  c.drawImage(peak.canvases[themeName], 0, 0, peak.WP * P, peak.rows * P);
   c.restore();
 }
 
@@ -913,6 +1036,43 @@ function drawSoundIcon(c, x, y, muted) {
   c.lineCap = 'butt';
 }
 
+// Day/night button. Shows a moon in day mode (tap for night) and a sun
+// at night (tap for day).
+function drawThemeIcon(c, x, y, name) {
+  c.fillStyle = PALETTE.panel;
+  c.beginPath();
+  c.arc(x, y, 20, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = PALETTE.text;
+  if (name === 'light') {
+    // Crescent moon: a disc with an offset disc cut out of it.
+    c.save();
+    c.beginPath();
+    c.arc(x, y, 9, 0, Math.PI * 2);
+    c.clip();
+    c.beginPath();
+    c.rect(x - 10, y - 10, 20, 20);
+    c.arc(x + 5, y - 4, 8, 0, Math.PI * 2);
+    c.fill('evenodd');
+    c.restore();
+  } else {
+    c.beginPath();
+    c.arc(x, y, 5.5, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = PALETTE.text;
+    c.lineWidth = 2;
+    c.lineCap = 'round';
+    c.beginPath();
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      c.moveTo(x + Math.cos(a) * 9, y + Math.sin(a) * 9);
+      c.lineTo(x + Math.cos(a) * 12, y + Math.sin(a) * 12);
+    }
+    c.stroke();
+    c.lineCap = 'butt';
+  }
+}
+
 function drawLabel(c, text, x, y) {
   c.font = `bold 13px ${FONT}`;
   c.textAlign = 'center';
@@ -1097,7 +1257,7 @@ function spawnColumn(x) {
   game.lastGapCenter = center;
   const gapTop = center - gap / 2;
   const gapBottom = center + gap / 2;
-  const P = CONFIG.obstaclePixel;
+  const P = CONFIG.pixelSize;
   const seed = () => Math.floor(Math.random() * 1e9);
   game.columns.push({
     x,
@@ -1113,7 +1273,7 @@ function spawnColumn(x) {
 // Hitbox outline of one peak, matching the slopes in makePeak().
 // dir = 1 for the bottom peak (grows down from tipY), -1 for the top one.
 function peakPolygon(x, tipY, peak, dir) {
-  const P = CONFIG.obstaclePixel;
+  const P = CONFIG.pixelSize;
   const far = (peak.rows + 20) * P;
   const pt = (ax, ay) => [x + ax * P, tipY + dir * ay * P];
   return [
@@ -1279,7 +1439,7 @@ function drawReadyScreen(c) {
   c.globalAlpha = pulse;
   drawSmallText(c, 'Tap, click or Space to flap', W / 2, 432, 18, PALETTE.accentLight);
   c.globalAlpha = 1;
-  drawSmallText(c, 'M to mute', W / 2, 462, 14);
+  drawSmallText(c, 'M to mute  ·  T for day / night', W / 2, 462, 14);
   drawSmallText(c, `Best: ${game.best}`, W / 2, 498, 20, PALETTE.gold);
 }
 
@@ -1347,12 +1507,14 @@ function render(c) {
   if (game.state === 'over') drawGameOverScreen(c);
 
   drawSoundIcon(c, MUTE_BUTTON.x, MUTE_BUTTON.y, sound.muted);
+  drawThemeIcon(c, THEME_BUTTON.x, THEME_BUTTON.y, themeName);
 }
 
 /* =====================================================================
    Input — mouse, touch and pen via pointer events, plus keyboard.
    ===================================================================== */
 const MUTE_BUTTON = { x: W - 36, y: 36, r: 24 };
+const THEME_BUTTON = { x: W - 36, y: 86, r: 24 };
 
 function handlePress() {
   sound.init(); // first gesture unlocks audio
@@ -1380,6 +1542,10 @@ window.addEventListener('pointerdown', (e) => {
     sound.toggleMute();
     return;
   }
+  if (Math.hypot(pt.x - THEME_BUTTON.x, pt.y - THEME_BUTTON.y) <= THEME_BUTTON.r) {
+    toggleTheme();
+    return;
+  }
   handlePress();
 }, { passive: false });
 
@@ -1387,6 +1553,8 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
     e.preventDefault(); // stop the page from scrolling
     if (!e.repeat) handlePress();
+  } else if (e.code === 'KeyT' && !e.repeat) {
+    toggleTheme();
   } else if (e.code === 'KeyM' && !e.repeat) {
     sound.init();
     sound.toggleMute();
