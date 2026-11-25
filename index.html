@@ -40,8 +40,31 @@ const CONFIG = {
   height: 720,
   groundHeight: 96,
 
-  // Background scroll speed (px/s) used by the preview animation.
-  scrollSpeed: 150,
+  // --- Player physics (px, px/s, px/s²) ---
+  playerX: 130,           // Bolt's fixed horizontal position
+  readyY: 300,            // where Bolt hovers on the start screen
+  gravity: 1650,          // downward acceleration
+  flapVelocity: -480,     // vertical speed set on each flap (negative = up)
+  maxFallSpeed: 650,      // terminal falling speed
+  maxTiltUp: -0.45,       // radians, nose-up tilt after a flap
+  maxTiltDown: 1.3,       // radians, nose-down tilt when falling fast
+  tiltResponse: 10,       // how quickly the tilt follows velocity
+  hitboxForgiveness: 3,   // player hitbox is this many px smaller than the art
+
+  // --- Speed & difficulty ---
+  startSpeed: 150,        // world scroll speed at score 0 (px/s)
+  maxSpeed: 220,          // speed never goes above this
+  speedPerPoint: 2,       // extra speed for each point scored
+  startGap: 195,          // vertical opening between crystals at score 0
+  minGap: 145,            // the opening never gets smaller than this
+  gapPerPoint: 1.5,       // opening shrinks by this much per point
+  columnSpacing: 250,     // horizontal distance between column pairs
+  gapEdgeMargin: 70,      // min distance from an opening to ceiling/ground
+  maxGapShift: 230,       // max change in opening height between neighbours
+
+  // --- Feel ---
+  restartDelay: 0.6,      // seconds before the game-over screen accepts input
+  volume: 0.6,            // master sound volume (0..1)
 
   // How fast each background layer moves relative to the ground (0..1).
   parallax: {
@@ -106,6 +129,8 @@ const PALETTE = {
   text: '#fff1dc',
   textOutline: '#2a1640',
   panel: 'rgba(24, 14, 44, 0.72)',
+  panelSolid: 'rgba(24, 14, 44, 0.9)',
+  dim: 'rgba(18, 10, 36, 0.35)',
 };
 
 const W = CONFIG.width;
@@ -519,9 +544,9 @@ function drawPropeller(c, hx, hy, angle) {
  * @param angle    body tilt in radians (+ = nose down)
  * @param prop     propeller angle in radians
  * @param flap     0..1 squash amount right after a flap
- * @param blink    true while the eye is closed
+ * @param eye      'open' | 'blink' | 'ko' (knocked out after a crash)
  */
-function drawPlayer(c, x, y, angle, prop, flap, blink) {
+function drawPlayer(c, x, y, angle, prop, flap, eye) {
   const R = CONFIG.playerRadius;
   c.save();
   c.translate(x, y);
@@ -576,13 +601,22 @@ function drawPlayer(c, x, y, angle, prop, flap, blink) {
   c.fillStyle = PALETTE.visor;
   roundRectPath(c, 1, -10, 16, 14, 6);
   c.fill();
-  if (blink) {
+  if (eye === 'blink') {
     c.strokeStyle = PALETTE.eye;
     c.lineWidth = 2;
     c.beginPath();
     c.moveTo(7, -3);
     c.lineTo(14, -3);
     c.stroke();
+  } else if (eye === 'ko') {
+    c.strokeStyle = PALETTE.eye;
+    c.lineWidth = 2;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(7.5, -6); c.lineTo(13.5, 0);
+    c.moveTo(13.5, -6); c.lineTo(7.5, 0);
+    c.stroke();
+    c.lineCap = 'butt';
   } else {
     c.fillStyle = 'rgba(95, 246, 255, 0.3)';
     c.beginPath();
@@ -622,16 +656,39 @@ function drawPlayer(c, x, y, angle, prop, flap, blink) {
 /* =====================================================================
    Draw functions — HUD
    ===================================================================== */
-function drawScore(c, value, x, y, size) {
+// Outlined, centred text used for the score and panel headings.
+function drawText(c, text, x, y, size, color = PALETTE.text) {
   c.font = `bold ${size}px ${FONT}`;
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.lineJoin = 'round';
-  c.lineWidth = size * 0.16;
+  c.lineWidth = Math.max(3, size * 0.16);
   c.strokeStyle = PALETTE.textOutline;
-  c.strokeText(String(value), x, y);
-  c.fillStyle = PALETTE.text;
-  c.fillText(String(value), x, y);
+  c.strokeText(String(text), x, y);
+  c.fillStyle = color;
+  c.fillText(String(text), x, y);
+}
+
+function drawScore(c, value, x, y, size) {
+  drawText(c, value, x, y, size);
+}
+
+// Plain (un-outlined) small text for use inside panels.
+function drawSmallText(c, text, x, y, size, color = PALETTE.text) {
+  c.font = `bold ${size}px ${FONT}`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillStyle = color;
+  c.fillText(text, x, y);
+}
+
+function drawPanel(c, x, y, w, h) {
+  c.fillStyle = PALETTE.panelSolid;
+  roundRectPath(c, x, y, w, h, 18);
+  c.fill();
+  c.strokeStyle = PALETTE.crystalMid;
+  c.lineWidth = 2;
+  c.stroke();
 }
 
 function drawSoundIcon(c, x, y, muted) {
@@ -677,52 +734,475 @@ function drawLabel(c, text, x, y) {
   c.fillText(text, x, y + 1);
 }
 
+
 /* =====================================================================
-   ART PREVIEW — a static scene showing every element.
-   (Gameplay replaces this in the next stage.)
+   Persistence (high score + mute) — localStorage can throw in private
+   mode, so every access is guarded.
    ===================================================================== */
-const preview = {
-  time: 0,
-  scroll: 0,
-  props: [0, 0, 0], // propeller angles for the three sample poses
+const STORAGE = { best: 'skybolt.best', muted: 'skybolt.muted' };
+
+function loadNumber(key) {
+  try { return Number(localStorage.getItem(key)) || 0; } catch (e) { return 0; }
+}
+function saveValue(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch (e) { /* ignore */ }
+}
+
+/* =====================================================================
+   Sound — tiny synthesized effects with the Web Audio API.
+   The AudioContext is created on the first input (browser autoplay rules).
+   ===================================================================== */
+const sound = {
+  ctx: null,
+  master: null,
+  muted: loadNumber(STORAGE.muted) === 1,
+
+  init() {
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return;
+    }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.muted ? 0 : CONFIG.volume;
+    this.master.connect(this.ctx.destination);
+  },
+
+  toggleMute() {
+    this.muted = !this.muted;
+    saveValue(STORAGE.muted, this.muted ? 1 : 0);
+    if (this.master) {
+      this.master.gain.setValueAtTime(this.muted ? 0 : CONFIG.volume, this.ctx.currentTime);
+    }
+  },
+
+  ready() {
+    return this.ctx && !this.muted;
+  },
+
+  // One oscillator note with a pitch sweep and a quick fade-out.
+  tone(type, f0, f1, dur, vol, delay = 0) {
+    const t = this.ctx.currentTime + delay;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(f0, t);
+    osc.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(this.master);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  },
+
+  // Low-passed white-noise burst (used for the crash).
+  noise(dur, vol) {
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1100;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filter).connect(gain).connect(this.master);
+    src.start(t);
+  },
+
+  flap() {
+    if (!this.ready()) return;
+    this.tone('triangle', 420, 780, 0.09, 0.25);
+  },
+  score() {
+    if (!this.ready()) return;
+    this.tone('sine', 880, 880, 0.09, 0.18);
+    this.tone('sine', 1320, 1320, 0.16, 0.18, 0.08);
+  },
+  hit() {
+    if (!this.ready()) return;
+    this.noise(0.28, 0.5);
+    this.tone('square', 220, 50, 0.32, 0.15);
+  },
 };
 
-function updatePreview(dt) {
-  preview.time += dt;
-  preview.scroll += CONFIG.scrollSpeed * dt;
-  preview.props[0] += 16 * dt; // idle: steady spin
-  preview.props[1] += 34 * dt; // flapping: fast spin
-  preview.props[2] += 6 * dt;  // diving: slow spin
+/* =====================================================================
+   Game state
+   ===================================================================== */
+// States: 'ready' (start screen) → 'playing' → 'dying' (falling after a
+// crash) → 'over' (game-over screen) → back to 'ready'.
+const game = {
+  state: 'ready',
+  time: 0,
+  scroll: 0,          // total distance scrolled, drives every layer
+  speed: CONFIG.startSpeed,
+  score: 0,
+  best: loadNumber(STORAGE.best),
+  newBest: false,
+  columns: [],
+  lastGapCenter: GROUND_Y / 2,
+  overTimer: 0,       // time spent on the game-over screen
+  shake: 0,           // screen-shake timer after a crash
+  flash: 0,           // white flash after a crash
+  player: null,
+};
+
+function resetGame() {
+  game.state = 'ready';
+  game.speed = CONFIG.startSpeed;
+  game.score = 0;
+  game.newBest = false;
+  game.columns = [];
+  game.lastGapCenter = GROUND_Y / 2;
+  game.overTimer = 0;
+  game.player = {
+    y: CONFIG.readyY,
+    vy: 0,
+    angle: 0,
+    prop: 0,          // propeller angle
+    propSpeed: 16,    // propeller spin speed (rad/s)
+    flap: 0,          // 0..1 squash after a flap
+  };
 }
 
-function renderPreview(c) {
-  const t = preview.time;
-  drawBackground(c, t, preview.scroll);
-  drawColumnPair(c, 300, 250, 430, t);
-  drawGround(c, preview.scroll);
+function startGame() {
+  game.state = 'playing';
+  spawnColumn(W + 120);
+  flap();
+}
 
-  // Three player poses.
-  const blink = t % 3.2 < 0.12;
-  const flapPulse = Math.max(0, 1 - (t % 0.6) / 0.25);
-  drawPlayer(c, 110, 200 + Math.sin(t * 3) * 4, 0, preview.props[0], 0, blink);
-  drawPlayer(c, 110, 340 - flapPulse * 6, -0.45, preview.props[1], flapPulse, false);
-  drawPlayer(c, 110, 480, 0.9, preview.props[2], 0, false);
-
-  drawLabel(c, 'Bolt · idle', 110, 245);
-  drawLabel(c, 'flap', 110, 385);
-  drawLabel(c, 'dive', 110, 525);
-  drawLabel(c, 'crystal column', 339, 340);
-
-  // HUD samples.
-  drawScore(c, 12, W / 2, 70, 56);
-  drawSoundIcon(c, W - 36, 36, false);
-  drawSoundIcon(c, W - 36, 84, true);
-
-  drawLabel(c, 'ART PREVIEW — sky, stars, sun, clouds, 3 ridges, ground', W / 2, GROUND_Y + 60);
+function flap() {
+  const p = game.player;
+  p.vy = CONFIG.flapVelocity;
+  p.flap = 1;
+  p.propSpeed = 42;
+  sound.flap();
 }
 
 /* =====================================================================
-   Main loop — fixed timestep so speed is identical on 60/120/144 Hz.
+   Obstacles
+   ===================================================================== */
+function currentGap() {
+  return Math.max(CONFIG.minGap, CONFIG.startGap - game.score * CONFIG.gapPerPoint);
+}
+
+function spawnColumn(x) {
+  const gap = currentGap();
+  // Keep the opening away from the ceiling/ground and not too far from
+  // the previous one, so every layout is reachable.
+  const minC = CONFIG.gapEdgeMargin + gap / 2;
+  const maxC = GROUND_Y - CONFIG.gapEdgeMargin - gap / 2;
+  const lo = Math.max(minC, game.lastGapCenter - CONFIG.maxGapShift);
+  const hi = Math.min(maxC, game.lastGapCenter + CONFIG.maxGapShift);
+  const center = lo + Math.random() * (hi - lo);
+  game.lastGapCenter = center;
+  game.columns.push({
+    x,
+    gapTop: center - gap / 2,
+    gapBottom: center + gap / 2,
+    passed: false,
+    sparkle: Math.random() * 10, // desyncs the sparkle animation
+  });
+}
+
+// Outline of one crystal as a polygon, matching drawCrystal(). For the
+// bottom crystal the shape is mirrored around the ground line.
+function crystalPolygon(x, length, bottom) {
+  const w = CONFIG.columnWidth;
+  const se = length - CONFIG.columnTipLength; // shaft end
+  const pts = [
+    [x, -50], [x + w, -50],
+    [x + w, se - 12], [x + w + 4, se - 12], [x + w + 4, se], [x + w, se],
+    [x + w * 0.58, length], [x + w * 0.42, length],
+    [x, se], [x - 4, se], [x - 4, se - 12], [x, se - 12],
+  ];
+  if (bottom) for (const p of pts) p[1] = GROUND_Y - p[1];
+  return pts;
+}
+
+/* =====================================================================
+   Collision helpers
+   ===================================================================== */
+function distSqToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const len = dx * dx + dy * dy;
+  let t = len ? ((px - ax) * dx + (py - ay) * dy) / len : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx - px, cy = ay + t * dy - py;
+  return cx * cx + cy * cy;
+}
+
+// True if a circle overlaps a (possibly concave) polygon.
+function circleHitsPolygon(cx, cy, r, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > cy) !== (yj > cy) && cx < ((xj - xi) * (cy - yi)) / (yj - yi) + xi) inside = !inside;
+    if (distSqToSegment(cx, cy, xi, yi, xj, yj) <= r * r) return true;
+  }
+  return inside;
+}
+
+function hitsColumn(col, cx, cy, r) {
+  const w = CONFIG.columnWidth;
+  if (cx + r < col.x - 4 || cx - r > col.x + w + 4) return false; // quick reject
+  return (
+    circleHitsPolygon(cx, cy, r, crystalPolygon(col.x, col.gapTop, false)) ||
+    circleHitsPolygon(cx, cy, r, crystalPolygon(col.x, GROUND_Y - col.gapBottom, true))
+  );
+}
+
+/* =====================================================================
+   Update (runs at a fixed 120 steps per second)
+   ===================================================================== */
+function crash() {
+  game.state = 'dying';
+  game.shake = 0.35;
+  game.flash = 1;
+  game.player.vy = Math.max(game.player.vy, 60);
+  sound.hit();
+}
+
+function endRun() {
+  game.state = 'over';
+  game.overTimer = 0;
+  if (game.score > game.best) {
+    game.best = game.score;
+    game.newBest = true;
+    saveValue(STORAGE.best, game.best);
+  }
+}
+
+// Gravity, capped fall speed, and tilt that follows vertical velocity.
+function applyPhysics(dt, tiltDownBias) {
+  const p = game.player;
+  p.vy = Math.min(p.vy + CONFIG.gravity * dt, CONFIG.maxFallSpeed);
+  p.y += p.vy * dt;
+  const target = Math.min(
+    CONFIG.maxTiltDown,
+    Math.max(CONFIG.maxTiltUp, (p.vy / CONFIG.maxFallSpeed) * CONFIG.maxTiltDown + tiltDownBias)
+  );
+  p.angle += (target - p.angle) * Math.min(1, dt * CONFIG.tiltResponse);
+}
+
+function update(dt) {
+  const p = game.player;
+  const R = CONFIG.playerRadius;
+  game.time += dt;
+  game.shake = Math.max(0, game.shake - dt);
+  game.flash = Math.max(0, game.flash - dt * 3);
+  p.flap = Math.max(0, p.flap - dt * 5);
+  p.prop += p.propSpeed * dt;
+
+  switch (game.state) {
+    case 'ready': {
+      // Hover in place while the world drifts by.
+      game.scroll += CONFIG.startSpeed * dt;
+      p.y = CONFIG.readyY + Math.sin(game.time * 3) * 6;
+      p.angle = 0;
+      p.propSpeed += (16 - p.propSpeed) * Math.min(1, dt * 3);
+      break;
+    }
+
+    case 'playing': {
+      // Difficulty ramps gently with score, up to the configured limits.
+      game.speed = Math.min(CONFIG.maxSpeed, CONFIG.startSpeed + game.score * CONFIG.speedPerPoint);
+      const dx = game.speed * dt;
+      game.scroll += dx;
+
+      for (const col of game.columns) col.x -= dx;
+      game.columns = game.columns.filter((col) => col.x > -CONFIG.columnWidth - 10);
+      const last = game.columns[game.columns.length - 1];
+      if (!last || last.x < W - CONFIG.columnSpacing) {
+        spawnColumn((last ? last.x : W) + CONFIG.columnSpacing);
+      }
+
+      p.propSpeed += (16 - p.propSpeed) * Math.min(1, dt * 3);
+      applyPhysics(dt, 0);
+
+      // Score once Bolt's centre passes a column's trailing edge.
+      for (const col of game.columns) {
+        if (!col.passed && col.x + CONFIG.columnWidth < CONFIG.playerX) {
+          col.passed = true;
+          game.score++;
+          sound.score();
+        }
+      }
+
+      // Collisions: ground, ceiling, crystals.
+      const hr = R - CONFIG.hitboxForgiveness;
+      if (p.y + R >= GROUND_Y) {
+        p.y = GROUND_Y - R;
+        crash();
+        endRun();
+      } else if (p.y - hr <= 0) {
+        p.y = hr;
+        p.vy = 0;
+        crash();
+      } else if (game.columns.some((col) => hitsColumn(col, CONFIG.playerX, p.y, hr))) {
+        crash();
+      }
+      break;
+    }
+
+    case 'dying': {
+      // World freezes; Bolt drops to the ground nose-first.
+      p.propSpeed += (0 - p.propSpeed) * Math.min(1, dt * 2);
+      applyPhysics(dt, 0.6);
+      if (p.y + R >= GROUND_Y) {
+        p.y = GROUND_Y - R;
+        endRun();
+      }
+      break;
+    }
+
+    case 'over': {
+      game.overTimer += dt;
+      p.propSpeed += (0 - p.propSpeed) * Math.min(1, dt * 2);
+      break;
+    }
+  }
+}
+
+/* =====================================================================
+   Render
+   ===================================================================== */
+function drawReadyScreen(c) {
+  drawText(c, 'SKYBOLT', W / 2, 150, 62);
+  drawText(c, 'Fly Bolt through the crystals', W / 2, 202, 18);
+
+  drawPanel(c, 90, 400, W - 180, 130);
+  const pulse = 0.6 + 0.4 * Math.sin(game.time * 4);
+  c.globalAlpha = pulse;
+  drawSmallText(c, 'Tap, click or Space to flap', W / 2, 432, 18, PALETTE.crystalLight);
+  c.globalAlpha = 1;
+  drawSmallText(c, 'M to mute', W / 2, 462, 14);
+  drawSmallText(c, `Best: ${game.best}`, W / 2, 498, 20, PALETTE.propLight);
+}
+
+function drawGameOverScreen(c) {
+  // Slide the panel in from above.
+  const t = Math.min(1, game.overTimer / 0.35);
+  const ease = 1 - Math.pow(1 - t, 3);
+  const y0 = -280 + ease * 450;
+
+  c.fillStyle = PALETTE.dim;
+  c.globalAlpha = ease;
+  c.fillRect(0, 0, W, H);
+  c.globalAlpha = 1;
+  drawPanel(c, 70, y0, W - 140, 270);
+  drawText(c, 'GAME OVER', W / 2, y0 + 48, 40);
+
+  drawSmallText(c, 'SCORE', W / 2 - 80, y0 + 105, 15, PALETTE.crystalLight);
+  drawSmallText(c, 'BEST', W / 2 + 80, y0 + 105, 15, PALETTE.crystalLight);
+  drawText(c, game.score, W / 2 - 80, y0 + 145, 44);
+  drawText(c, game.best, W / 2 + 80, y0 + 145, 44, PALETTE.propLight);
+
+  if (game.newBest) {
+    const s = 1 + 0.06 * Math.sin(game.time * 8);
+    c.save();
+    c.translate(W / 2, y0 + 192);
+    c.scale(s, s);
+    drawText(c, 'NEW BEST!', 0, 0, 22, PALETTE.crystalMid);
+    c.restore();
+  }
+
+  if (game.overTimer >= CONFIG.restartDelay) {
+    c.globalAlpha = 0.6 + 0.4 * Math.sin(game.time * 4);
+    drawSmallText(c, 'Tap or Space to retry', W / 2, y0 + 240, 17, PALETTE.crystalLight);
+    c.globalAlpha = 1;
+  }
+}
+
+function render(c) {
+  const p = game.player;
+
+  c.save();
+  if (game.shake > 0) {
+    const m = (game.shake / 0.35) * 6;
+    c.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m);
+  }
+
+  drawBackground(c, game.time, game.scroll);
+  for (const col of game.columns) {
+    drawColumnPair(c, col.x, col.gapTop, col.gapBottom, game.time + col.sparkle);
+  }
+  drawGround(c, game.scroll);
+
+  const dead = game.state === 'dying' || game.state === 'over';
+  const eye = dead ? 'ko' : game.time % 3.2 < 0.12 ? 'blink' : 'open';
+  drawPlayer(c, CONFIG.playerX, p.y, p.angle, p.prop, p.flap, eye);
+  c.restore();
+
+  if (game.flash > 0) {
+    c.fillStyle = `rgba(255, 245, 235, ${game.flash * 0.6})`;
+    c.fillRect(0, 0, W, H);
+  }
+
+  if (game.state === 'ready') drawReadyScreen(c);
+  if (game.state === 'playing' || game.state === 'dying') drawScore(c, game.score, W / 2, 70, 56);
+  if (game.state === 'over') drawGameOverScreen(c);
+
+  drawSoundIcon(c, MUTE_BUTTON.x, MUTE_BUTTON.y, sound.muted);
+}
+
+/* =====================================================================
+   Input — mouse, touch and pen via pointer events, plus keyboard.
+   ===================================================================== */
+const MUTE_BUTTON = { x: W - 36, y: 36, r: 24 };
+
+function handlePress() {
+  sound.init(); // first gesture unlocks audio
+  if (game.state === 'ready') startGame();
+  else if (game.state === 'playing') flap();
+  else if (game.state === 'over' && game.overTimer >= CONFIG.restartDelay) resetGame();
+}
+
+// Convert a screen position to logical 480x720 coordinates.
+function toLogical(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: ((clientX - rect.left) / rect.width) * W,
+    y: ((clientY - rect.top) / rect.height) * H,
+  };
+}
+
+// Listen on the whole window so taps on the letterbox area also count.
+window.addEventListener('pointerdown', (e) => {
+  if (e.button > 0) return; // left click / touch only
+  e.preventDefault();
+  const pt = toLogical(e.clientX, e.clientY);
+  if (Math.hypot(pt.x - MUTE_BUTTON.x, pt.y - MUTE_BUTTON.y) <= MUTE_BUTTON.r) {
+    sound.init();
+    sound.toggleMute();
+    return;
+  }
+  handlePress();
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    e.preventDefault(); // stop the page from scrolling
+    if (!e.repeat) handlePress();
+  } else if (e.code === 'KeyM' && !e.repeat) {
+    sound.init();
+    sound.toggleMute();
+  }
+});
+
+// Block the long-press context menu on mobile.
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+/* =====================================================================
+   Main loop — fixed timestep so the game plays identically on 60, 120
+   or 144 Hz screens. Rendering happens once per display frame.
    ===================================================================== */
 const STEP = 1 / 120;
 let accumulator = 0;
@@ -734,12 +1214,14 @@ function frame(now) {
   if (dt > 0.25) dt = 0.25; // avoid a huge catch-up after tab switches
   accumulator += dt;
   while (accumulator >= STEP) {
-    updatePreview(STEP);
+    update(STEP);
     accumulator -= STEP;
   }
-  renderPreview(ctx);
+  render(ctx);
   requestAnimationFrame(frame);
 }
+
+resetGame();
 requestAnimationFrame(frame);
 </script>
 </body>
