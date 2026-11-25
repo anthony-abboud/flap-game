@@ -1,6 +1,6 @@
 # Clutch
 
-A small Lehigh University–themed, one-button browser game: guide **Clutch**, a Mountain Hawk, through gaps between crystal columns over a dusk landscape. Built with a single `index.html`, vanilla JavaScript and the Canvas API. No frameworks, no build step, no external assets.
+A small Lehigh University–themed, one-button browser game: guide **Clutch**, a Mountain Hawk, through gaps between crystal columns over a dusk landscape. Built with a single `index.html`, vanilla JavaScript and the Canvas API. No frameworks, no build step. The only image file is Clutch's sprite; everything else is drawn in code.
 
 **▶ Play it:** https://anthony-abboud.github.io/flap-game
 
@@ -20,6 +20,10 @@ Open `index.html` in any modern browser.
 ## Tuning
 
 Gameplay and look are controlled by the `CONFIG` object at the top of the script in `index.html` (gravity, flap strength, gap size, scroll speed, parallax, and so on). Colors live in `PALETTE` right below it.
+
+## Clutch's sprite
+
+`sprites/clutch-1.png` is the in-game sprite, a smaller copy of the original drawing in `sprites/source/`. To animate the wings, add more frames (same canvas size, body in the same spot, facing right) and list them in `SPRITE.frames` in `index.html`. `SPRITE.width`, `anchorX` and `anchorY` set the size and where the hitbox sits on the image. If the images fail to load, the game draws a built-in hawk instead.
 
 ## Features
 

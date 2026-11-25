@@ -580,7 +580,7 @@ function drawTail(c, flap) {
  * @param flap     0..1 amount right after a flap (wings slam down)
  * @param eye      'open' | 'blink' | 'ko' (knocked out after a crash)
  */
-function drawPlayer(c, x, y, angle, wing, flap, eye) {
+function drawVectorHawk(c, x, y, angle, wing, flap, eye) {
   const R = CONFIG.playerRadius;
   // Steady wing beat, plus a hard downstroke right after each flap.
   const wingRot = 0.25 + Math.sin(wing) * 0.45 - flap * 1.1;
@@ -732,6 +732,59 @@ function drawPlayer(c, x, y, angle, wing, flap, eye) {
   // Near wing on top.
   drawWing(c, -3, 0, wingRot, PALETTE.hawkWing, PALETTE.hawkWingEdge);
 
+  c.restore();
+}
+
+/* =====================================================================
+   Clutch sprite (image frames). Falls back to the drawn hawk above if
+   the images are missing or haven't loaded yet.
+   ===================================================================== */
+const SPRITE = {
+  // Wing-beat frames, in order. Add more files here to animate the wings.
+  frames: ['sprites/clutch-1.png'],
+  koFrame: null,     // optional image shown after a crash, e.g. 'sprites/clutch-ko.png'
+  width: 72,         // drawn width in logical px; height keeps the image's aspect ratio
+  // The point in the image (0..1 across, 0..1 down) that sits on the hitbox centre.
+  anchorX: 0.63,
+  anchorY: 0.57,
+};
+
+function loadImage(src) {
+  const img = new Image();
+  img.src = src;
+  return img;
+}
+const spriteFrames = SPRITE.frames.map(loadImage);
+const spriteKo = SPRITE.koFrame ? loadImage(SPRITE.koFrame) : null;
+
+function imageReady(img) {
+  return img && img.complete && img.naturalWidth > 0;
+}
+
+/**
+ * Draws Clutch. Same parameters as drawVectorHawk. The wing phase picks
+ * the animation frame; tilt and flap squash are applied in code.
+ */
+function drawPlayer(c, x, y, angle, wing, flap, eye) {
+  if (!spriteFrames.length || !spriteFrames.every(imageReady)) {
+    drawVectorHawk(c, x, y, angle, wing, flap, eye);
+    return;
+  }
+  let img;
+  if (eye === 'ko' && imageReady(spriteKo)) {
+    img = spriteKo;
+  } else {
+    const cycle = wrap(wing, Math.PI * 2) / (Math.PI * 2); // 0..1 through a wing beat
+    img = spriteFrames[Math.floor(cycle * spriteFrames.length) % spriteFrames.length];
+  }
+  const w = SPRITE.width;
+  const h = (w * img.naturalHeight) / img.naturalWidth;
+
+  c.save();
+  c.translate(x, y);
+  c.rotate(angle);
+  c.scale(1 + flap * 0.08, 1 - flap * 0.08);
+  c.drawImage(img, -w * SPRITE.anchorX, -h * SPRITE.anchorY, w, h);
   c.restore();
 }
 
