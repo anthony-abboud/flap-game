@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Skybolt</title>
+<title>Clutch</title>
 <style>
   html, body {
     margin: 0;
@@ -26,7 +26,7 @@
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Skybolt game"></canvas>
+<canvas id="game" aria-label="Clutch game"></canvas>
 <script>
 'use strict';
 
@@ -41,8 +41,8 @@ const CONFIG = {
   groundHeight: 96,
 
   // --- Player physics (px, px/s, px/s²) ---
-  playerX: 130,           // Bolt's fixed horizontal position
-  readyY: 300,            // where Bolt hovers on the start screen
+  playerX: 130,           // Clutch's fixed horizontal position
+  readyY: 300,            // where Clutch hovers on the start screen
   gravity: 1650,          // downward acceleration
   flapVelocity: -480,     // vertical speed set on each flap (negative = up)
   maxFallSpeed: 650,      // terminal falling speed
@@ -84,7 +84,7 @@ const CONFIG = {
   playerRadius: 18,
 };
 
-/* Colour palette: dusk sky, teal crystals, coral robot. */
+/* Colour palette: dusk sky, teal crystals, brown-and-white hawk. */
 const PALETTE = {
   skyTop: '#1d1540',
   skyMid: '#5b2a6e',
@@ -114,17 +114,20 @@ const PALETTE = {
   mossShade: '#23947f',
   pebble: '#46e0c8',
 
-  robotBody: '#ff8a5b',
-  robotLight: '#ffc29a',
-  robotShade: '#d9533f',
-  robotOutline: '#3b1730',
-  robotCream: '#fff1dc',
-  robotMetal: '#6b5a7d',
-  visor: '#2a2045',
-  eye: '#5ff6ff',
-  propLight: '#ffe08a',
-  propDark: '#d9a043',
-  blush: '#ff6f8e',
+  // Clutch the Mountain Hawk: brown and white with a gold beak.
+  hawkBody: '#6b3a1a',
+  hawkLight: '#9a6337',
+  hawkShade: '#43220c',
+  hawkWing: '#55301a',
+  hawkWingEdge: '#a8743f',
+  hawkOutline: '#241108',
+  hawkWhite: '#fbf6ec',
+  hawkBelly: '#efdcbc',
+  hawkStreak: '#8a5530',
+  beak: '#f5b82e',
+  beakShade: '#d08f16',
+  iris: '#ffc93a',
+  gold: '#ffd36b',
 
   text: '#fff1dc',
   textOutline: '#2a1640',
@@ -510,145 +513,224 @@ function drawColumnPair(c, x, gapTop, gapBottom, time) {
 }
 
 /* =====================================================================
-   Draw functions — the player: "Bolt", a round propeller robot
+   Draw functions — the player: "Clutch", a Mountain Hawk
    ===================================================================== */
 
-// Two-bladed propeller seen from the side. Each blade's visible length
-// follows cos(angle), which reads as spinning.
-function drawPropeller(c, hx, hy, angle) {
-  // Faint motion-blur disc.
-  c.fillStyle = 'rgba(255, 240, 200, 0.18)';
+// One wing in local space: pivot at (0,0), feathers pointing back (-x).
+// Positive rotation lifts the wing tip.
+function drawWing(c, px, py, rot, fill, edge) {
+  c.save();
+  c.translate(px, py);
+  c.rotate(rot);
   c.beginPath();
-  c.ellipse(hx, hy, 17, 3.2, 0, 0, Math.PI * 2);
+  c.moveTo(3, -4);
+  c.quadraticCurveTo(-10, -13, -25, -7);   // leading edge to wing tip
+  c.lineTo(-19, -3);                        // feather notches
+  c.lineTo(-24, 0);
+  c.lineTo(-17, 1.5);
+  c.lineTo(-21, 5);
+  c.quadraticCurveTo(-8, 7, 3, 4);          // trailing edge back to body
+  c.closePath();
+  c.fillStyle = fill;
   c.fill();
+  c.strokeStyle = PALETTE.hawkOutline;
+  c.lineWidth = 2;
+  c.stroke();
+  // Lighter covert feathers along the leading edge.
+  c.strokeStyle = edge;
+  c.lineWidth = 2.5;
+  c.beginPath();
+  c.moveTo(0, -3.5);
+  c.quadraticCurveTo(-9, -9.5, -18, -6.5);
+  c.stroke();
+  c.restore();
+}
 
-  const blades = [0, Math.PI].map((o) => ({
-    cos: Math.cos(angle + o),
-    front: Math.sin(angle + o) > 0,
-  }));
-  blades.sort((p, q) => p.front - q.front); // back blade first
-  for (const bl of blades) {
-    c.fillStyle = bl.front ? PALETTE.propLight : PALETTE.propDark;
+// Fanned tail feathers with pale tips.
+function drawTail(c, flap) {
+  const R = CONFIG.playerRadius;
+  c.save();
+  c.translate(-R + 5, 3);
+  c.rotate(-0.15 - flap * 0.3);
+  for (const a of [-0.35, 0, 0.35]) {
+    c.save();
+    c.rotate(a);
     c.beginPath();
-    c.ellipse(hx + bl.cos * 8, hy, Math.abs(bl.cos) * 8 + 1.5, 2.6, 0, 0, Math.PI * 2);
+    c.moveTo(0, -3.5);
+    c.lineTo(-15, -4.5);
+    c.quadraticCurveTo(-19, 0, -15, 4.5);
+    c.lineTo(0, 3.5);
+    c.closePath();
+    c.fillStyle = PALETTE.hawkShade;
     c.fill();
+    c.strokeStyle = PALETTE.hawkOutline;
+    c.lineWidth = 1.6;
+    c.stroke();
+    c.fillStyle = PALETTE.hawkWhite;
+    c.fillRect(-16, -3, 3, 6);
+    c.restore();
   }
-  c.fillStyle = PALETTE.robotMetal;
-  c.beginPath();
-  c.arc(hx, hy, 3.4, 0, Math.PI * 2);
-  c.fill();
+  c.restore();
 }
 
 /**
- * @param x,y      centre of the robot
+ * @param x,y      centre of the hawk
  * @param angle    body tilt in radians (+ = nose down)
- * @param prop     propeller angle in radians
- * @param flap     0..1 squash amount right after a flap
+ * @param wing     wing-beat phase in radians
+ * @param flap     0..1 amount right after a flap (wings slam down)
  * @param eye      'open' | 'blink' | 'ko' (knocked out after a crash)
  */
-function drawPlayer(c, x, y, angle, prop, flap, eye) {
+function drawPlayer(c, x, y, angle, wing, flap, eye) {
   const R = CONFIG.playerRadius;
+  // Steady wing beat, plus a hard downstroke right after each flap.
+  const wingRot = 0.25 + Math.sin(wing) * 0.45 - flap * 1.1;
+
   c.save();
   c.translate(x, y);
   c.rotate(angle);
   c.scale(1 + flap * 0.08, 1 - flap * 0.08);
 
-  // Antenna mast + propeller.
-  c.fillStyle = PALETTE.robotMetal;
-  c.fillRect(-2, -R - 9, 4, 11);
-  drawPropeller(c, 0, -R - 10, prop);
+  drawTail(c, flap);
+  // Far wing peeks out behind the body.
+  drawWing(c, -1, -5, wingRot + 0.25, PALETTE.hawkShade, PALETTE.hawkWing);
 
-  // Little back fin that kicks up when flapping.
-  c.save();
-  c.translate(-R + 4, 3);
-  c.rotate(0.5 + flap * 0.7);
-  c.fillStyle = PALETTE.robotShade;
-  roundRectPath(c, -13, -4, 14, 8, 4);
-  c.fill();
-  c.strokeStyle = PALETTE.robotOutline;
-  c.lineWidth = 2;
-  c.stroke();
-  c.restore();
+  // Talons tucked under the body.
+  c.fillStyle = PALETTE.beak;
+  c.strokeStyle = PALETTE.hawkOutline;
+  c.lineWidth = 1.5;
+  for (const fx of [0, 7]) {
+    c.beginPath();
+    c.ellipse(fx, R - 1, 3.2, 4, 0, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+  }
 
-  // Body sphere.
-  const g = c.createRadialGradient(-6, -8, 2, 0, 0, R);
-  g.addColorStop(0, PALETTE.robotLight);
-  g.addColorStop(0.55, PALETTE.robotBody);
-  g.addColorStop(1, PALETTE.robotShade);
+  // Crest feathers ruffled at the back of the head.
+  c.fillStyle = PALETTE.hawkBody;
+  for (const [cx, h] of [[-6, 7], [0, 9], [6, 6]]) {
+    c.beginPath();
+    c.moveTo(cx - 4, -R + 4);
+    c.lineTo(cx - 6, -R - h + 4);
+    c.lineTo(cx + 4, -R + 3);
+    c.closePath();
+    c.fill();
+    c.stroke();
+  }
+
+  // Body.
+  const g = c.createRadialGradient(-5, -8, 2, 0, 0, R + 2);
+  g.addColorStop(0, PALETTE.hawkLight);
+  g.addColorStop(0.55, PALETTE.hawkBody);
+  g.addColorStop(1, PALETTE.hawkShade);
   c.fillStyle = g;
   c.beginPath();
-  c.arc(0, 0, R, 0, Math.PI * 2);
+  c.ellipse(0, 0, R + 1, R - 1, 0, 0, Math.PI * 2);
   c.fill();
 
-  // Cream belly plate (clipped to the body).
+  // White head and pale streaked chest (clipped to the body).
   c.save();
   c.beginPath();
-  c.arc(0, 0, R, 0, Math.PI * 2);
+  c.ellipse(0, 0, R + 1, R - 1, 0, 0, Math.PI * 2);
   c.clip();
-  c.fillStyle = PALETTE.robotCream;
+  c.fillStyle = PALETTE.hawkBelly;
   c.beginPath();
-  c.ellipse(-2, R * 0.95, R * 0.95, R * 0.55, 0, 0, Math.PI * 2);
+  c.ellipse(6, 11, 13, 9, -0.3, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = PALETTE.hawkStreak;
+  c.lineWidth = 1.4;
+  for (const [sx, sy] of [[2, 10], [8, 8], [6, 14], [12, 12]]) {
+    c.beginPath();
+    c.moveTo(sx - 2, sy - 1.5);
+    c.lineTo(sx, sy);
+    c.lineTo(sx + 2, sy - 1.5);
+    c.stroke();
+  }
+  c.fillStyle = PALETTE.hawkWhite;
+  c.beginPath();
+  c.ellipse(8, -7, 12, 9.5, 0.15, 0, Math.PI * 2);
   c.fill();
   c.restore();
 
-  c.strokeStyle = PALETTE.robotOutline;
+  c.strokeStyle = PALETTE.hawkOutline;
   c.lineWidth = 2;
   c.beginPath();
-  c.arc(0, 0, R, 0, Math.PI * 2);
+  c.ellipse(0, 0, R + 1, R - 1, 0, 0, Math.PI * 2);
   c.stroke();
 
-  // Visor with a single glowing eye.
-  c.fillStyle = PALETTE.visor;
-  roundRectPath(c, 1, -10, 16, 14, 6);
+  // Hooked beak: upper bill, then the shorter lower bill.
+  c.lineWidth = 1.6;
+  c.fillStyle = PALETTE.beakShade;
+  c.beginPath();
+  c.moveTo(14, -1.5);
+  c.lineTo(21, -1);
+  c.lineTo(15, 2.5);
+  c.closePath();
   c.fill();
+  c.stroke();
+  c.fillStyle = PALETTE.beak;
+  c.beginPath();
+  c.moveTo(13, -7.5);
+  c.lineTo(21, -7);
+  c.quadraticCurveTo(26.5, -5.5, 25, 0.5);   // hook tip
+  c.lineTo(22, -1.8);
+  c.lineTo(14, -1.5);
+  c.closePath();
+  c.fill();
+  c.stroke();
+  c.fillStyle = PALETTE.hawkOutline;
+  c.beginPath();
+  c.arc(17.5, -5, 0.9, 0, Math.PI * 2);
+  c.fill();
+
+  // Eye with a fierce brow.
+  const ex = 10, ey = -7;
   if (eye === 'blink') {
-    c.strokeStyle = PALETTE.eye;
+    c.strokeStyle = PALETTE.hawkOutline;
     c.lineWidth = 2;
     c.beginPath();
-    c.moveTo(7, -3);
-    c.lineTo(14, -3);
+    c.moveTo(ex - 3.5, ey);
+    c.lineTo(ex + 3.5, ey);
     c.stroke();
   } else if (eye === 'ko') {
-    c.strokeStyle = PALETTE.eye;
+    c.strokeStyle = PALETTE.hawkOutline;
     c.lineWidth = 2;
     c.lineCap = 'round';
     c.beginPath();
-    c.moveTo(7.5, -6); c.lineTo(13.5, 0);
-    c.moveTo(13.5, -6); c.lineTo(7.5, 0);
+    c.moveTo(ex - 3, ey - 3); c.lineTo(ex + 3, ey + 3);
+    c.moveTo(ex + 3, ey - 3); c.lineTo(ex - 3, ey + 3);
     c.stroke();
     c.lineCap = 'butt';
   } else {
-    c.fillStyle = 'rgba(95, 246, 255, 0.3)';
+    c.fillStyle = PALETTE.iris;
     c.beginPath();
-    c.arc(10.5, -3, 6, 0, Math.PI * 2);
+    c.arc(ex, ey, 3.6, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = PALETTE.eye;
+    c.strokeStyle = PALETTE.hawkOutline;
+    c.lineWidth = 1.2;
+    c.stroke();
+    c.fillStyle = PALETTE.hawkOutline;
     c.beginPath();
-    c.arc(10.5, -3, 3.8, 0, Math.PI * 2);
+    c.arc(ex + 0.8, ey, 1.9, 0, Math.PI * 2);
     c.fill();
     c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(12, -4.5, 1.3, 0, Math.PI * 2);
+    c.arc(ex + 1.6, ey - 1.2, 0.8, 0, Math.PI * 2);
     c.fill();
+  }
+  if (eye !== 'ko') {
+    // Brow slants down toward the beak for a determined look.
+    c.strokeStyle = PALETTE.hawkShade;
+    c.lineWidth = 3;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(ex - 5, ey - 6);
+    c.lineTo(ex + 5, ey - 3);
+    c.stroke();
+    c.lineCap = 'butt';
   }
 
-  // Cheek light, rivets and a glossy highlight.
-  c.fillStyle = PALETTE.blush;
-  c.globalAlpha = 0.7;
-  c.beginPath();
-  c.arc(7, 8, 2.6, 0, Math.PI * 2);
-  c.fill();
-  c.globalAlpha = 1;
-  c.fillStyle = PALETTE.robotOutline;
-  for (const rx of [-8, -2]) {
-    c.beginPath();
-    c.arc(rx, 11, 1.2, 0, Math.PI * 2);
-    c.fill();
-  }
-  c.fillStyle = 'rgba(255, 255, 255, 0.55)';
-  c.beginPath();
-  c.ellipse(-8, -10, 4.5, 2.6, -0.6, 0, Math.PI * 2);
-  c.fill();
+  // Near wing on top.
+  drawWing(c, -3, 0, wingRot, PALETTE.hawkWing, PALETTE.hawkWingEdge);
 
   c.restore();
 }
@@ -739,7 +821,7 @@ function drawLabel(c, text, x, y) {
    Persistence (high score + mute) — localStorage can throw in private
    mode, so every access is guarded.
    ===================================================================== */
-const STORAGE = { best: 'skybolt.best', muted: 'skybolt.muted' };
+const STORAGE = { best: 'flap-game.best', muted: 'flap-game.muted' };
 
 function loadNumber(key) {
   try { return Number(localStorage.getItem(key)) || 0; } catch (e) { return 0; }
@@ -866,8 +948,8 @@ function resetGame() {
     y: CONFIG.readyY,
     vy: 0,
     angle: 0,
-    prop: 0,          // propeller angle
-    propSpeed: 16,    // propeller spin speed (rad/s)
+    wing: 0,          // wing-beat phase
+    wingSpeed: 16,    // wing-beat speed (rad/s)
     flap: 0,          // 0..1 squash after a flap
   };
 }
@@ -882,7 +964,7 @@ function flap() {
   const p = game.player;
   p.vy = CONFIG.flapVelocity;
   p.flap = 1;
-  p.propSpeed = 42;
+  p.wingSpeed = 42;
   sound.flap();
 }
 
@@ -999,7 +1081,7 @@ function update(dt) {
   game.shake = Math.max(0, game.shake - dt);
   game.flash = Math.max(0, game.flash - dt * 3);
   p.flap = Math.max(0, p.flap - dt * 5);
-  p.prop += p.propSpeed * dt;
+  p.wing += p.wingSpeed * dt;
 
   switch (game.state) {
     case 'ready': {
@@ -1007,7 +1089,7 @@ function update(dt) {
       game.scroll += CONFIG.startSpeed * dt;
       p.y = CONFIG.readyY + Math.sin(game.time * 3) * 6;
       p.angle = 0;
-      p.propSpeed += (16 - p.propSpeed) * Math.min(1, dt * 3);
+      p.wingSpeed += (16 - p.wingSpeed) * Math.min(1, dt * 3);
       break;
     }
 
@@ -1024,10 +1106,10 @@ function update(dt) {
         spawnColumn((last ? last.x : W) + CONFIG.columnSpacing);
       }
 
-      p.propSpeed += (16 - p.propSpeed) * Math.min(1, dt * 3);
+      p.wingSpeed += (16 - p.wingSpeed) * Math.min(1, dt * 3);
       applyPhysics(dt, 0);
 
-      // Score once Bolt's centre passes a column's trailing edge.
+      // Score once Clutch's centre passes a column's trailing edge.
       for (const col of game.columns) {
         if (!col.passed && col.x + CONFIG.columnWidth < CONFIG.playerX) {
           col.passed = true;
@@ -1053,8 +1135,8 @@ function update(dt) {
     }
 
     case 'dying': {
-      // World freezes; Bolt drops to the ground nose-first.
-      p.propSpeed += (0 - p.propSpeed) * Math.min(1, dt * 2);
+      // World freezes; Clutch drops to the ground nose-first.
+      p.wingSpeed += (0 - p.wingSpeed) * Math.min(1, dt * 2);
       applyPhysics(dt, 0.6);
       if (p.y + R >= GROUND_Y) {
         p.y = GROUND_Y - R;
@@ -1065,7 +1147,7 @@ function update(dt) {
 
     case 'over': {
       game.overTimer += dt;
-      p.propSpeed += (0 - p.propSpeed) * Math.min(1, dt * 2);
+      p.wingSpeed += (0 - p.wingSpeed) * Math.min(1, dt * 2);
       break;
     }
   }
@@ -1075,8 +1157,8 @@ function update(dt) {
    Render
    ===================================================================== */
 function drawReadyScreen(c) {
-  drawText(c, 'SKYBOLT', W / 2, 150, 62);
-  drawText(c, 'Fly Bolt through the crystals', W / 2, 202, 18);
+  drawText(c, 'CLUTCH', W / 2, 150, 62);
+  drawText(c, 'Fly the Mountain Hawk through the crystals', W / 2, 202, 18);
 
   drawPanel(c, 90, 400, W - 180, 130);
   const pulse = 0.6 + 0.4 * Math.sin(game.time * 4);
@@ -1084,7 +1166,7 @@ function drawReadyScreen(c) {
   drawSmallText(c, 'Tap, click or Space to flap', W / 2, 432, 18, PALETTE.crystalLight);
   c.globalAlpha = 1;
   drawSmallText(c, 'M to mute', W / 2, 462, 14);
-  drawSmallText(c, `Best: ${game.best}`, W / 2, 498, 20, PALETTE.propLight);
+  drawSmallText(c, `Best: ${game.best}`, W / 2, 498, 20, PALETTE.gold);
 }
 
 function drawGameOverScreen(c) {
@@ -1103,7 +1185,7 @@ function drawGameOverScreen(c) {
   drawSmallText(c, 'SCORE', W / 2 - 80, y0 + 105, 15, PALETTE.crystalLight);
   drawSmallText(c, 'BEST', W / 2 + 80, y0 + 105, 15, PALETTE.crystalLight);
   drawText(c, game.score, W / 2 - 80, y0 + 145, 44);
-  drawText(c, game.best, W / 2 + 80, y0 + 145, 44, PALETTE.propLight);
+  drawText(c, game.best, W / 2 + 80, y0 + 145, 44, PALETTE.gold);
 
   if (game.newBest) {
     const s = 1 + 0.06 * Math.sin(game.time * 8);
@@ -1138,7 +1220,7 @@ function render(c) {
 
   const dead = game.state === 'dying' || game.state === 'over';
   const eye = dead ? 'ko' : game.time % 3.2 < 0.12 ? 'blink' : 'open';
-  drawPlayer(c, CONFIG.playerX, p.y, p.angle, p.prop, p.flap, eye);
+  drawPlayer(c, CONFIG.playerX, p.y, p.angle, p.wing, p.flap, eye);
   c.restore();
 
   if (game.flash > 0) {

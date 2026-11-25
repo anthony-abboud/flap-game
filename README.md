@@ -1,6 +1,6 @@
-# Skybolt
+# Clutch
 
-A small one-button browser game: guide **Bolt**, a round propeller robot, through gaps between crystal columns over a dusk landscape. Built with a single `index.html`, vanilla JavaScript and the Canvas API. No frameworks, no build step, no external assets.
+A small Lehigh University–themed, one-button browser game: guide **Clutch**, a Mountain Hawk, through gaps between crystal columns over a dusk landscape. Built with a single `index.html`, vanilla JavaScript and the Canvas API. No frameworks, no build step, no external assets.
 
 **▶ Play it:** https://anthony-abboud.github.io/flap-game
 
@@ -23,7 +23,7 @@ Gameplay and look are controlled by the `CONFIG` object at the top of the script
 
 ## Features
 
-- All art drawn with canvas shapes: propeller robot, crystal columns, parallax dusk sky, scrolling ground
+- All art drawn with canvas shapes: Clutch the hawk, crystal columns, parallax dusk sky, scrolling ground
 - Fixed-timestep physics (120 steps/s), so it plays the same on 60 Hz and 120 Hz screens
 - Gentle difficulty ramp: speed rises and gaps shrink with score, within set limits
 - Synthesized sound effects (Web Audio API) with a mute toggle
